@@ -147,4 +147,8 @@ while True:
     # set FPS
     clock.tick(30)
     
-    
+# map change - screen vs window
+# number of ray change
+# brick color change
+# location of player change
+# how do we know the ray reached to the wall (index of tile)
