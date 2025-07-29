@@ -44,8 +44,9 @@ def main():
     HUD = font.render("F1 / F2 - Screenshot JPEG/BMP   F5/F6 - Shadows on/off   F7/F8 - HUD Show/Hide", True, (0,0,0))
 
     # Creates window 
-    WIDTH = 1000
-    HEIGHT = 800
+    WIDTH = 800
+    HEIGHT = 600
+    WALL_HEIGHT = 100
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("PyRay - Python Raycasting Engine (v0.03)")
 
@@ -139,8 +140,11 @@ def main():
         # showHUD - Show / Hide
         if keys[K_F7]:
             showHUD = True
+            print("K_F7:", keys[K_F7])
         if keys[K_F8]:
             showHUD = False
+            print("K_F8:", keys[K_F8])
+
             
         # Draws roof and floor
         screen.fill((25,25,25))
@@ -149,6 +153,7 @@ def main():
         # Starts drawing level from 0 to < WIDTH 
         column = 0        
         while column < WIDTH:
+            # Setting FOV
             cameraX = 2.0 * column / WIDTH - 1.0
             rayPositionX = positionX
             rayPositionY = positionY
@@ -204,17 +209,17 @@ def main():
                 perpWallDistance = abs((mapY - rayPositionY + ( 1.0 - stepY ) / 2.0) / rayDirectionY)
 
             # Calculating HEIGHT of the line to draw
-            lineHEIGHT = abs(int(HEIGHT / (perpWallDistance+.0000001)))
-            drawStart = -lineHEIGHT / 2.0 + HEIGHT / 2.0
+            lineHEIGHT = abs(int(WALL_HEIGHT / (perpWallDistance+.0000001)))
+            drawStart = -lineHEIGHT / 2.0 + WALL_HEIGHT / 2.0
 
             # if drawStat < 0 it would draw outside the screen
             if (drawStart < 0):
                 drawStart = 0
 
-            drawEnd = lineHEIGHT / 2.0 + HEIGHT / 2.0
+            drawEnd = lineHEIGHT / 2.0 + WALL_HEIGHT / 2.0
 
-            if (drawEnd >= HEIGHT):
-                drawEnd = HEIGHT - 1
+            if (drawEnd >= WALL_HEIGHT):
+                drawEnd = WALL_HEIGHT - 1
 
             # Wall colors 0 to 3
             wallcolors = [ [], [150,0,0], [0,150,0], [0,0,150] ]
@@ -222,6 +227,7 @@ def main():
 
             # If side == 1 then ton the color down. Gives a "showShadow" an the wall.
             # Draws showShadow if showShadow is True
+            # Depth based shadow
             if showShadow:
                 if side == 1:
                     for i,v in enumerate(color):
@@ -241,3 +247,9 @@ def main():
         pygame.display.flip()           
        
 main()
+
+# 1. What is the way of exiting the game? -> esc button -> how can we exit the game with cloes(x) button
+# 2. Where the player start? -> Could you trap the player?
+# 3. There are two ways of shooting rays.
+# 4. Where do we set FOV & DDA(Digital Differential Analyzer)
+# 5. Where do we increase height?
