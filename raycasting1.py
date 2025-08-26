@@ -36,6 +36,70 @@ def close():
     pygame.display.quit()
     pygame.quit()
 
+def draw_minimap(screen, worldMap, posX, posY, dirX, dirY, rays,
+                 scale=8, padding=10):
+    """
+    screen: pygame Surface
+    worldMap: 2D list[int] (0 = free, >0 = wall)
+    posX, posY: player position in world units (map cells)
+    dirX, dirY: player facing direction vector (normalized-ish)
+    rays: list of tuples (perp_dist, (rayDirX, rayDirY))
+    scale: pixels per map cell on minimap
+    padding: minimap margin from top-left
+    """
+    MAP_H = len(worldMap)
+    MAP_W = len(worldMap[0]) if MAP_H else 0
+
+    mm_w = MAP_W * scale
+    mm_h = MAP_H * scale
+    ox, oy = padding, padding
+
+    COLOR_BG_BORDER = (12, 12, 16)
+    COLOR_MINI_WALL  = (80, 80, 100)
+    COLOR_MINI_FREE  = (28, 28, 32)
+    COLOR_RAY        = (255, 215, 0)
+    COLOR_PLAYER     = (50, 200, 255)
+
+    # background
+    pygame.draw.rect(screen, COLOR_BG_BORDER, (ox - 2, oy - 2, mm_w + 4, mm_h + 4), border_radius=6)
+
+    # tiles
+    for r in range(MAP_H):
+        for c in range(MAP_W):
+            rect = pygame.Rect(ox + c * scale, oy + r * scale, scale, scale)
+            if worldMap[r][c] != 0:
+                pygame.draw.rect(screen, COLOR_MINI_WALL, rect)
+            else:
+                pygame.draw.rect(screen, COLOR_MINI_FREE, rect)
+
+    # rays (downsample to avoid overdraw)
+    if rays:
+        step = max(1, len(rays) // 120)
+        px = ox + int(posY * scale)  # NOTE: map indexing worldMap[row][col] = [x][y]
+        py = oy + int(posX * scale)  # but in your engine posX ~ mapX, posY ~ mapY
+        # 위 두 줄은 엔진의 좌표 사용 방식(X/Y ↔ row/col)을 맞추기 위한 보정.
+        # 만약 맵 인덱싱/좌표가 일치한다면 px/py 계산을 (posX,posY) 그대로 써도 됨.
+
+        for i in range(0, len(rays), step):
+            dist, (rDx, rDy) = rays[i]
+            # 방향 정규화 후, 거리(perp)만큼 쏴서 끝점
+            mag = math.hypot(rDx, rDy) or 1.0
+            ux, uy = rDx / mag, rDy / mag
+            rx = px + int(uy * dist * scale)  # 좌표계 축 교차 보정
+            ry = py + int(ux * dist * scale)
+            pygame.draw.line(screen, COLOR_RAY, (px, py), (rx, ry), 1)
+
+    # player
+    px = ox + int(posY * scale)
+    py = oy + int(posX * scale)
+    pygame.draw.circle(screen, COLOR_PLAYER, (px, py), 3)
+
+    # facing indicator (direction vector)
+    magd = math.hypot(dirX, dirY) or 1.0
+    fx = px + int(dirY / magd * 8)
+    fy = py + int(dirX / magd * 8)
+    pygame.draw.line(screen, COLOR_PLAYER, (px, py), (fx, fy), 2)
+
 def main():
     pygame.init()
 
@@ -44,9 +108,9 @@ def main():
     HUD = font.render("F1 / F2 - Screenshot JPEG/BMP   F5/F6 - Shadows on/off   F7/F8 - HUD Show/Hide", True, (0,0,0))
 
     # Creates window 
-    WIDTH = 800
-    HEIGHT = 600
-    WALL_HEIGHT = 100
+    WIDTH = 1000
+    HEIGHT = 700
+    WALL_HEIGHT = HEIGHT
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("PyRay - Python Raycasting Engine (v0.03)")
 
@@ -149,7 +213,9 @@ def main():
         # Draws roof and floor
         screen.fill((25,25,25))
         pygame.draw.rect(screen, (50,50,50), (0, HEIGHT/2, WIDTH, HEIGHT/2)) 
-                
+
+        rays_for_minimap = []  # [(perpWallDistance, (rayDirectionX, rayDirectionY)), ...]
+
         # Starts drawing level from 0 to < WIDTH 
         column = 0        
         while column < WIDTH:
@@ -235,7 +301,10 @@ def main():
 
             # Drawing the graphics                           
             pygame.draw.line(screen, color, (column,drawStart), (column, drawEnd), 2)
+            rays_for_minimap.append( (perpWallDistance, (rayDirectionX, rayDirectionY)) )
             column += 2
+
+        draw_minimap(screen, worldMap, positionX, positionY, directionX, directionY, rays_for_minimap)
 
         # Drawing HUD if showHUD is True
         if showHUD:
