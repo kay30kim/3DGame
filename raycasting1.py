@@ -36,6 +36,51 @@ def close():
     pygame.display.quit()
     pygame.quit()
 
+MINIMAP_SCALE = 8  # pixels per tile on the minimap
+MINIMAP_PADDING = 10
+COLOR_MINI_WALL = (60, 60, 80)
+COLOR_MINI_FREE = (25, 25, 30)
+COLOR_MINI_PLAYER = (120, 200, 255)
+COLOR_RAY = (255, 215, 0)
+
+def draw_minimap(screen, worldMap, posX, posY, dirX, dirY, rays, scale=8, padding=10):
+    MAP_W = len(worldMap)
+    MAP_H = len(worldMap[0])
+    mm_w = MAP_W * MINIMAP_SCALE
+    mm_h = MAP_H * MINIMAP_SCALE
+    ox = MINIMAP_PADDING
+    oy = MINIMAP_PADDING
+    pygame.draw.rect(screen, (12, 12, 16), (ox - 2, oy - 2, mm_w + 4, mm_h + 4), border_radius=6)
+    for r in range(MAP_H):
+        for c in range(MAP_W):
+            rect = pygame.Rect(ox + c * MINIMAP_SCALE, oy + r * MINIMAP_SCALE, MINIMAP_SCALE, MINIMAP_SCALE)
+            if worldMap[r][c] != 0:
+                pygame.draw.rect(screen, COLOR_MINI_WALL, rect)
+            else:
+                pygame.draw.rect(screen, COLOR_MINI_FREE, rect)
+    
+    if rays:
+        step = max(1, len(rays) // 120)
+        px = ox + int(posY * scale)
+        py = oy + int(posX * scale)
+
+        for i in range(0, len(rays), step):
+            dist, (rDx, rDy) = rays[i]
+            mag = math.hypot(rDx, rDy) or 1.0
+            ux, uy = rDx / mag, rDy / mag
+            rx = px + int(uy * dist * scale)
+            ry = py + int(ux * dist * scale)
+            pygame.draw.line(screen, COLOR_RAY, (px, py), (rx, ry), 1)
+    px = ox + int(posX * MINIMAP_SCALE)
+    py = oy + int(posY * MINIMAP_SCALE)
+    pygame.draw.circle(screen, COLOR_MINI_PLAYER, (px, py), 3)
+    
+    magd = math.hypot(dirX, dirY) or 1.0
+    fx = px + int(dirY / magd * 8)
+    fy = py + int(dirX / magd * 8)
+    pygame.draw.line(screen, COLOR_MINI_PLAYER, (px, py), (fx, fy), 2)
+
+
 def main():
     pygame.init()
 
@@ -46,7 +91,7 @@ def main():
     # Creates window 
     WIDTH = 800
     HEIGHT = 600
-    WALL_HEIGHT = 100
+    WALL_HEIGHT = HEIGHT
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("PyRay - Python Raycasting Engine (v0.03)")
 
@@ -151,6 +196,7 @@ def main():
         pygame.draw.rect(screen, (50,50,50), (0, HEIGHT/2, WIDTH, HEIGHT/2)) 
                 
         # Starts drawing level from 0 to < WIDTH 
+        rays_for_minimap = [] 
         column = 0        
         while column < WIDTH:
             # Setting FOV
@@ -236,6 +282,9 @@ def main():
             # Drawing the graphics                           
             pygame.draw.line(screen, color, (column,drawStart), (column, drawEnd), 2)
             column += 2
+            rays_for_minimap.append( (perpWallDistance, (rayDirectionX, rayDirectionY)) )
+        draw_minimap(screen, worldMap, positionX, positionY, directionX, directionY, rays_for_minimap)
+
 
         # Drawing HUD if showHUD is True
         if showHUD:
