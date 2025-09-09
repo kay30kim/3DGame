@@ -71,8 +71,8 @@ def draw_minimap(screen, worldMap, posX, posY, dirX, dirY, rays, scale=8, paddin
             rx = px + int(uy * dist * scale)
             ry = py + int(ux * dist * scale)
             pygame.draw.line(screen, COLOR_RAY, (px, py), (rx, ry), 1)
-    px = ox + int(posX * MINIMAP_SCALE)
-    py = oy + int(posY * MINIMAP_SCALE)
+    px = ox + int(posY * MINIMAP_SCALE)
+    py = oy + int(posX * MINIMAP_SCALE)
     pygame.draw.circle(screen, COLOR_MINI_PLAYER, (px, py), 3)
     
     magd = math.hypot(dirX, dirY) or 1.0
