@@ -81,6 +81,77 @@ def draw_minimap(screen, worldMap, posX, posY, dirX, dirY, rays, scale=8, paddin
     pygame.draw.line(screen, COLOR_MINI_PLAYER, (px, py), (fx, fy), 2)
 
 
+
+def draw_hands(surf):
+    w, h = surf.get_size()
+    skin = (235, 205, 175, 235)
+    shade = (210, 180, 150, 235)
+    pygame.draw.ellipse(surf, skin,  (int(w*0.05),  int(h*0.50), int(w*0.40), int(h*0.45)))
+    pygame.draw.ellipse(surf, skin,  (int(w*0.55),  int(h*0.50), int(w*0.40), int(h*0.45)))
+    pygame.draw.ellipse(surf, shade, (int(w*0.08),  int(h*0.68), int(w*0.16), int(h*0.18)))
+    pygame.draw.ellipse(surf, shade, (int(w*0.62),  int(h*0.68), int(w*0.16), int(h*0.18)))
+
+
+def draw_knife(surf):
+    draw_hands(surf)
+    w, h = surf.get_size()
+    handle = (30, 30, 30, 255)
+    blade  = (200, 200, 210, 255)
+    pygame.draw.rect(surf, handle, (int(w*0.45), int(h*0.60), int(w*0.10), int(h*0.20)), border_radius=4)
+    pygame.draw.polygon(
+        surf, blade,
+        [(int(w*0.50), int(h*0.60)),
+         (int(w*0.70), int(h*0.30)),
+         (int(w*0.58), int(h*0.60))]
+    )
+    
+def draw_gun(surf):
+    draw_hands(surf)
+    w, h = surf.get_size()
+    body = (100, 100, 100, 255)
+    grip = (200, 200, 200, 255)
+    barrel= (55, 55, 65, 255)
+    pygame.draw.rect(surf, body,   (int(w*0.35), int(h*0.48), int(w*0.30), int(h*0.14)), border_radius=6)
+    pygame.draw.rect(surf, grip,   (int(w*0.52), int(h*0.58), int(w*0.10), int(h*0.18)), border_radius=4)
+    pygame.draw.rect(surf, barrel, (int(w*0.62), int(h*0.52), int(w*0.18), int(h*0.08)), border_radius=4)
+  
+def load_or_make(path, size, draw_fn):
+    w, h = size
+    try:
+        if os.path.exists(path):
+            img = pygame.image.load(path).convert_alpha()
+            return pygame.transform.smoothscale(img, (w, h))
+    except Exception:
+        pass
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    draw_fn(surf)
+    return surf
+    
+def build_weapon_assets(view_w, view_h):
+    base_w = max(240, view_w // 3)
+    base_h = max(180, view_h // 3)
+    assets = {
+        "hands": load_or_make("assets/hands.png", (base_w, base_h), draw_hands),
+      	"gun" : load_or_make("assets/gun.png", (base_w, base_h), draw_gun),
+        "knife": load_or_make("assets/gun.png", (base_w, base_h), draw_knife)
+    }
+    return assets
+
+
+# def update_weapon(weapon):
+#     if weapon = "hands":
+    
+#     elif weapon = "gun":
+    
+#     elif weapon = "knife"
+  
+def draw_weapon(screen, assets, weapon):
+    w, h = screen.get_size()
+    surf = assets.get(weapon)
+    rect = surf.get_rect()
+    screen.blit(surf, rect)
+    return rect
+
 def main():
     pygame.init()
 
@@ -116,6 +187,9 @@ def main():
     TGM = (math.cos(ROTATIONSPEED), math.sin(ROTATIONSPEED))
     ITGM = (math.cos(-ROTATIONSPEED), math.sin(-ROTATIONSPEED))
     COS, SIN = (0,1)
+
+    weapon = ""
+    weapon_assets = build_weapon_assets(WIDTH, HEIGHT)
     
     while True:
         # Catches user input
@@ -126,6 +200,13 @@ def main():
                 if event.key == K_ESCAPE:
                     close()
                     return
+                if event.key == K_1: #손
+                    weapon = "hands" 
+                elif event.key == K_2: #권총
+                    weapon = "gun"
+                elif event.key == K_3: #칼
+                    weapon = "knife"
+                # elif event.key == K_SPACE:
                 # keys[event.key] = True
             # elif event.type == KEYUP:
             #     keys[event.key] = False
@@ -284,6 +365,7 @@ def main():
             column += 2
             rays_for_minimap.append( (perpWallDistance, (rayDirectionX, rayDirectionY)) )
         draw_minimap(screen, worldMap, positionX, positionY, directionX, directionY, rays_for_minimap)
+        draw_weapon(screen, weapon_assets, weapon)
 
 
         # Drawing HUD if showHUD is True
