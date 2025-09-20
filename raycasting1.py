@@ -3,6 +3,7 @@ import math
 import time
 import pygame
 from pygame.locals import *
+import os  # NEW
 
 # except ImportError:
 #     print("PyRay could not import necessary modules")
@@ -100,6 +101,141 @@ def draw_minimap(screen, worldMap, posX, posY, dirX, dirY, rays,
     fy = py + int(dirX / magd * 8)
     pygame.draw.line(screen, COLOR_PLAYER, (px, py), (fx, fy), 2)
 
+# --- NEW: 무기 스프라이트 로드/플레이스홀더 및 애니메이션 유틸 ---
+def _load_or_make(path, size, draw_fn):
+    w, h = size
+    try:
+        if os.path.exists(path):
+            img = pygame.image.load(path).convert_alpha()
+            return pygame.transform.smoothscale(img, (w, h))
+    except Exception:
+        pass
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    draw_fn(surf)
+    return surf
+
+def _draw_hands_placeholder(surf):
+    w, h = surf.get_size()
+    skin = (235, 205, 175, 235)
+    shade = (210, 180, 150, 235)
+    pygame.draw.ellipse(surf, skin,  (int(w*0.05),  int(h*0.50), int(w*0.40), int(h*0.45)))
+    pygame.draw.ellipse(surf, skin,  (int(w*0.55),  int(h*0.50), int(w*0.40), int(h*0.45)))
+    pygame.draw.ellipse(surf, shade, (int(w*0.08),  int(h*0.68), int(w*0.16), int(h*0.18)))
+    pygame.draw.ellipse(surf, shade, (int(w*0.62),  int(h*0.68), int(w*0.16), int(h*0.18)))
+
+def _draw_knife_placeholder(surf):
+    _draw_hands_placeholder(surf)
+    w, h = surf.get_size()
+    handle = (30, 30, 30, 255)
+    blade  = (200, 200, 210, 255)
+    pygame.draw.rect(surf, handle, (int(w*0.45), int(h*0.60), int(w*0.10), int(h*0.20)), border_radius=4)
+    pygame.draw.polygon(
+        surf, blade,
+        [(int(w*0.50), int(h*0.60)),
+         (int(w*0.70), int(h*0.30)),
+         (int(w*0.58), int(h*0.60))]
+    )
+
+def _draw_gun_placeholder(surf):
+    _draw_hands_placeholder(surf)
+    w, h = surf.get_size()
+    body  = (35, 35, 45, 255)
+    grip  = (25, 25, 30, 255)
+    barrel= (55, 55, 65, 255)
+    pygame.draw.rect(surf, body,   (int(w*0.35), int(h*0.48), int(w*0.30), int(h*0.14)), border_radius=6)
+    pygame.draw.rect(surf, grip,   (int(w*0.52), int(h*0.58), int(w*0.10), int(h*0.18)), border_radius=4)
+    pygame.draw.rect(surf, barrel, (int(w*0.62), int(h*0.52), int(w*0.18), int(h*0.08)), border_radius=4)
+
+def build_weapon_assets(view_w, view_h):
+    base_w = max(240, view_w // 3)
+    base_h = max(180, view_h // 3)
+    assets = {
+        "hands": _load_or_make("assets/hands.png", (base_w, base_h), _draw_hands_placeholder),
+        "knife": _load_or_make("assets/knife.png", (base_w, base_h), _draw_knife_placeholder),
+        "gun":   _load_or_make("assets/gun.png",   (base_w, base_h), _draw_gun_placeholder),
+    }
+    return assets
+
+def draw_weapon(screen, assets, selected, sway_xy=(0,0)):
+    """현재 선택된 무기를 화면 하단 중앙에 그린다(약간의 흔들림 적용). 반환값: blit된 rect"""
+    surf = assets.get(selected)
+    if not surf:
+        return None
+    w, h = screen.get_size()
+    ox, oy = sway_xy
+    rect = surf.get_rect()
+    rect.midbottom = (w // 2 + ox, h - 8 + oy)  # 아래 여백 8px
+    screen.blit(surf, rect)
+    return rect
+
+def _attack_spec(weapon: str):
+    if weapon == "knife": return (0.18, 0.25)  # (duration, cooldown)
+    if weapon == "gun":   return (0.12, 0.15)
+    return (0.20, 0.25)   # hands
+
+def trigger_attack(weapon: str, state: dict):
+    dur, cd = _attack_spec(weapon)
+    if state.get("mode", "idle") == "idle" and state.get("cooldown", 0.0) <= 0.0:
+        state["mode"] = "attack"
+        state["t"] = 0.0
+        state["dur"] = dur
+        state["cooldown"] = cd
+
+def update_weapon_state(weapon: str, state: dict, dt: float):
+    if state.get("cooldown", 0.0) > 0.0:
+        state["cooldown"] -= dt
+        if state["cooldown"] < 0.0: state["cooldown"] = 0.0
+    if state.get("mode", "idle") == "attack":
+        state["t"] += dt
+        dur = state.get("dur", _attack_spec(weapon)[0])
+        if state["t"] >= dur:
+            state["mode"] = "idle"
+            state["t"] = 0.0
+
+def _ease_out_quad(x: float) -> float:
+    return 1.0 - (1.0 - x) * (1.0 - x)
+
+def weapon_anim_offsets(weapon: str, state: dict):
+    if state.get("mode") != "attack":
+        return (0, 0), False, 0.0
+    dur = state.get("dur", _attack_spec(weapon)[0])
+    p = max(0.0, min(1.0, state.get("t", 0.0) / dur))
+    if weapon == "knife":
+        dx = int(18 * math.sin(p * math.pi))
+        dy = int(8  * math.sin(p * math.pi))
+        flash = False
+    elif weapon == "gun":
+        dx = 0
+        dy = -int(14 * _ease_out_quad(p))
+        flash = (state["t"] < min(0.05, dur * 0.45))
+    else:  # hands
+        dx = 0
+        dy = -int(10 * math.sin(p * math.pi))
+        flash = False
+    return (dx, dy), flash, p
+
+def draw_muzzle_flash(screen, weapon_rect):
+    w, h = weapon_rect.size
+    x0 = weapon_rect.right - int(w * 0.12)
+    y0 = weapon_rect.top   + int(h * 0.52)
+    pts = [
+        (x0, y0),
+        (x0 + int(w * 0.10), y0 - int(h * 0.03)),
+        (x0 + int(w * 0.12), y0 + int(h * 0.02)),
+    ]
+    pygame.draw.polygon(screen, (255, 240, 180), pts)
+    pygame.draw.polygon(screen, (255, 255, 220), pts, width=1)
+
+def draw_slash_effect(screen, weapon_rect, p: float):
+    w, h = weapon_rect.size
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    x = int(w * (0.50 + 0.25 * p))
+    y = int(h * (0.50 - 0.10 * math.sin(p * math.pi)))
+    tri = [(x, y - 12), (x + 48, y), (x, y + 12)]
+    alpha = int(200 * (1.0 - p))
+    pygame.draw.polygon(surf, (255, 255, 255, alpha), tri)
+    screen.blit(surf, weapon_rect.topleft)
+
 def main():
     pygame.init()
 
@@ -113,6 +249,13 @@ def main():
     WALL_HEIGHT = HEIGHT
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("PyRay - Python Raycasting Engine (v0.03)")
+
+    # --- NEW: 무기/애니메이션 상태 및 에셋/시계 ---
+    selected_weapon = "hands"           # 기본 무기
+    weapon_phase = 0.0                  # 흔들림 위상
+    weapon_state = {"mode": "idle", "t": 0.0, "cooldown": 0.0, "dur": 0.0}
+    weapon_assets = build_weapon_assets(WIDTH, HEIGHT)
+    clock = pygame.time.Clock()
 
     showShadow = True
     showHUD = True    
@@ -140,14 +283,31 @@ def main():
         # Catches user input
         # Sets keys[key] to True or False
         # keys = pygame.key.get_pressed()
+        dt = clock.tick(60) / 1000.0  # NEW: 프레임 경과시간(초)
         for event in pygame.event.get():
             if event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
                     close()
                     return
                 # keys[event.key] = True
+                # NEW: 무기 전환 & 공격
+                if event.key == K_1:
+                    selected_weapon = "knife"
+                elif event.key == K_3:
+                    selected_weapon = "gun"
+                elif event.key == K_2:
+                    selected_weapon = "hands"
+                elif event.key == K_SPACE:
+                    trigger_attack(selected_weapon, weapon_state)
             # elif event.type == KEYUP:
             #     keys[event.key] = False
+            # NEW: 창 닫기(X) & 마우스 좌클릭 공격
+            if event.type == QUIT:
+                close()
+                return
+            if event.type == MOUSEBUTTONDOWN and event.button == 1:
+                trigger_attack(selected_weapon, weapon_state)
+
         # Checks with keys are pressed by the user
         # Uses if so that more than one button at a time can be pressed.  
         keys = pygame.key.get_pressed()
@@ -209,7 +369,9 @@ def main():
             showHUD = False
             print("K_F8:", keys[K_F8])
 
-            
+        # --- NEW: 무기 애니메이션 상태 업데이트 ---
+        update_weapon_state(selected_weapon, weapon_state, dt)
+
         # Draws roof and floor
         screen.fill((25,25,25))
         pygame.draw.rect(screen, (50,50,50), (0, HEIGHT/2, WIDTH, HEIGHT/2)) 
@@ -250,7 +412,7 @@ def main():
 
             else:
                 stepY = 1
-                sideDistanceY = (mapY + 1.0 - rayPositionY) * deltaDistanceY
+                sideDistanceY = (rayPositionY - mapY) * deltaDistanceY
 
             # Finding distance to a wall
             hit = 0
@@ -305,6 +467,23 @@ def main():
             column += 2
 
         draw_minimap(screen, worldMap, positionX, positionY, directionX, directionY, rays_for_minimap)
+
+        # --- NEW: 무기 흔들림 + 공격 오프셋 & 이펙트 렌더 ---
+        moving = keys[K_UP] or keys[K_DOWN] or keys[K_LEFT] or keys[K_RIGHT]
+        weapon_phase += 0.12 if moving else 0.05
+        sway_x = int(2 * math.sin(weapon_phase * 2.0))
+        sway_y = int(3 * math.sin(weapon_phase * 1.0))
+
+        (atk_dx, atk_dy), flash_on, slash_p = weapon_anim_offsets(selected_weapon, weapon_state)
+        total_dx = sway_x + atk_dx
+        total_dy = sway_y + atk_dy
+
+        weapon_rect = draw_weapon(screen, weapon_assets, selected_weapon, (total_dx, total_dy))
+        if weapon_rect:
+            if selected_weapon == "gun" and flash_on:
+                draw_muzzle_flash(screen, weapon_rect)
+            if selected_weapon == "knife" and weapon_state.get("mode") == "attack":
+                draw_slash_effect(screen, weapon_rect, slash_p)
 
         # Drawing HUD if showHUD is True
         if showHUD:
