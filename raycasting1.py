@@ -1,4 +1,5 @@
 # try:
+import os
 import math
 import time
 import pygame
@@ -119,6 +120,7 @@ def load_or_make(path, size, draw_fn):
     w, h = size
     try:
         if os.path.exists(path):
+            print(".")
             img = pygame.image.load(path).convert_alpha()
             return pygame.transform.smoothscale(img, (w, h))
     except Exception:
@@ -133,7 +135,7 @@ def build_weapon_assets(view_w, view_h):
     assets = {
         "hands": load_or_make("assets/hands.png", (base_w, base_h), draw_hands),
       	"gun" : load_or_make("assets/gun.png", (base_w, base_h), draw_gun),
-        "knife": load_or_make("assets/gun.png", (base_w, base_h), draw_knife)
+        "knife": load_or_make("assets/knife.png", (base_w, base_h), draw_knife)
     }
     return assets
 
@@ -149,6 +151,7 @@ def draw_weapon(screen, assets, weapon):
     w, h = screen.get_size()
     surf = assets.get(weapon)
     rect = surf.get_rect()
+    rect.midbottom = (w // 2, h - 8)
     screen.blit(surf, rect)
     return rect
 
@@ -188,7 +191,7 @@ def main():
     ITGM = (math.cos(-ROTATIONSPEED), math.sin(-ROTATIONSPEED))
     COS, SIN = (0,1)
 
-    weapon = ""
+    weapon = "hands"
     weapon_assets = build_weapon_assets(WIDTH, HEIGHT)
     
     while True:
