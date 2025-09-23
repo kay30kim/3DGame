@@ -1,4 +1,6 @@
 # try:
+import random
+import os
 import math
 import time
 import pygame
@@ -119,6 +121,7 @@ def load_or_make(path, size, draw_fn):
     w, h = size
     try:
         if os.path.exists(path):
+            print(".")
             img = pygame.image.load(path).convert_alpha()
             return pygame.transform.smoothscale(img, (w, h))
     except Exception:
@@ -133,7 +136,7 @@ def build_weapon_assets(view_w, view_h):
     assets = {
         "hands": load_or_make("assets/hands.png", (base_w, base_h), draw_hands),
       	"gun" : load_or_make("assets/gun.png", (base_w, base_h), draw_gun),
-        "knife": load_or_make("assets/gun.png", (base_w, base_h), draw_knife)
+        "knife": load_or_make("assets/knife.png", (base_w, base_h), draw_knife)
     }
     return assets
 
@@ -145,12 +148,23 @@ def build_weapon_assets(view_w, view_h):
     
 #     elif weapon = "knife"
   
-def draw_weapon(screen, assets, weapon):
+def draw_weapon(screen, assets, weapon, xy=(0,0)):
     w, h = screen.get_size()
     surf = assets.get(weapon)
     rect = surf.get_rect()
+    ox, oy = xy
+    rect.midbottom = (w // 2 + ox, h - 8 + oy)
     screen.blit(surf, rect)
     return rect
+
+def animation_offset(weapon):
+    p = random.randint(-5, 5)
+    dx = 0
+    dy = -int(14 * _ease_out_quad(p))
+    return dx, dy
+
+def _ease_out_quad(x: float) -> float:
+    return 1.0 - (1.0 - x) * (1.0 - x)
 
 def main():
     pygame.init()
@@ -188,7 +202,10 @@ def main():
     ITGM = (math.cos(-ROTATIONSPEED), math.sin(-ROTATIONSPEED))
     COS, SIN = (0,1)
 
-    weapon = ""
+    dx = 0
+    dy = 0
+
+    weapon = "hands"
     weapon_assets = build_weapon_assets(WIDTH, HEIGHT)
     
     while True:
@@ -225,6 +242,7 @@ def main():
             planeX = planeX * ITGM[COS] - planeY * ITGM[SIN]
             planeY = oldPlaneX * ITGM[SIN] + planeY * ITGM[COS]
 
+
         if keys[K_RIGHT]:
             oldDirectionX = directionX
             directionX = directionX * TGM[COS] - directionY * TGM[SIN]
@@ -232,18 +250,21 @@ def main():
             oldPlaneX = planeX
             planeX = planeX * TGM[COS] - planeY * TGM[SIN]
             planeY = oldPlaneX * TGM[SIN] + planeY * TGM[COS]    
+     
 
         if keys[K_UP]:
             if not worldMap[int(positionX + directionX * MOVESPEED)][int(positionY)]:
                 positionX += directionX * MOVESPEED
             if not worldMap[int(positionX)][int(positionY + directionY * MOVESPEED)]:
                 positionY += directionY * MOVESPEED
+           
                 
         if keys[K_DOWN]:
             if not worldMap[int(positionX - directionX * MOVESPEED)][int(positionY)]:
                 positionX -= directionX * MOVESPEED
             if not worldMap[int(positionX)][int(positionY - directionY * MOVESPEED)]:
                 positionY -= directionY * MOVESPEED
+            
 
         if keys[K_F1]:
             try:
@@ -365,7 +386,8 @@ def main():
             column += 2
             rays_for_minimap.append( (perpWallDistance, (rayDirectionX, rayDirectionY)) )
         draw_minimap(screen, worldMap, positionX, positionY, directionX, directionY, rays_for_minimap)
-        draw_weapon(screen, weapon_assets, weapon)
+        dx, dy = animation_offset(weapon)
+        draw_weapon(screen, weapon_assets, weapon, (dx, dy))
 
 
         # Drawing HUD if showHUD is True
