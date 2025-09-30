@@ -1,4 +1,6 @@
 # try:
+import random
+import os
 import math
 import time
 import pygame
@@ -145,6 +147,19 @@ def _draw_gun_placeholder(surf):
     pygame.draw.rect(surf, body,   (int(w*0.35), int(h*0.48), int(w*0.30), int(h*0.14)), border_radius=6)
     pygame.draw.rect(surf, grip,   (int(w*0.52), int(h*0.58), int(w*0.10), int(h*0.18)), border_radius=4)
     pygame.draw.rect(surf, barrel, (int(w*0.62), int(h*0.52), int(w*0.18), int(h*0.08)), border_radius=4)
+  
+def load_or_make(path, size, draw_fn):
+    w, h = size
+    try:
+        if os.path.exists(path):
+            print(".")
+            img = pygame.image.load(path).convert_alpha()
+            return pygame.transform.smoothscale(img, (w, h))
+    except Exception:
+        pass
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    draw_fn(surf)
+    return surf
 
 def build_weapon_assets(view_w, view_h):
     base_w = max(240, view_w // 3)
@@ -191,50 +206,9 @@ def update_weapon_state(weapon: str, state: dict, dt: float):
         if state["t"] >= dur:
             state["mode"] = "idle"
             state["t"] = 0.0
-
+           
 def _ease_out_quad(x: float) -> float:
     return 1.0 - (1.0 - x) * (1.0 - x)
-
-def weapon_anim_offsets(weapon: str, state: dict):
-    if state.get("mode") != "attack":
-        return (0, 0), False, 0.0
-    dur = state.get("dur", _attack_spec(weapon)[0])
-    p = max(0.0, min(1.0, state.get("t", 0.0) / dur))
-    if weapon == "knife":
-        dx = int(18 * math.sin(p * math.pi))
-        dy = int(8  * math.sin(p * math.pi))
-        flash = False
-    elif weapon == "gun":
-        dx = 0
-        dy = -int(14 * _ease_out_quad(p))
-        flash = (state["t"] < min(0.05, dur * 0.45))
-    else:  # hands
-        dx = 0
-        dy = -int(10 * math.sin(p * math.pi))
-        flash = False
-    return (dx, dy), flash, p
-
-def draw_muzzle_flash(screen, weapon_rect):
-    w, h = weapon_rect.size
-    x0 = weapon_rect.right - int(w * 0.12)
-    y0 = weapon_rect.top   + int(h * 0.52)
-    pts = [
-        (x0, y0),
-        (x0 + int(w * 0.10), y0 - int(h * 0.03)),
-        (x0 + int(w * 0.12), y0 + int(h * 0.02)),
-    ]
-    pygame.draw.polygon(screen, (255, 240, 180), pts)
-    pygame.draw.polygon(screen, (255, 255, 220), pts, width=1)
-
-def draw_slash_effect(screen, weapon_rect, p: float):
-    w, h = weapon_rect.size
-    surf = pygame.Surface((w, h), pygame.SRCALPHA)
-    x = int(w * (0.50 + 0.25 * p))
-    y = int(h * (0.50 - 0.10 * math.sin(p * math.pi)))
-    tri = [(x, y - 12), (x + 48, y), (x, y + 12)]
-    alpha = int(200 * (1.0 - p))
-    pygame.draw.polygon(surf, (255, 255, 255, alpha), tri)
-    screen.blit(surf, weapon_rect.topleft)
 
 def main():
     pygame.init()
@@ -278,6 +252,12 @@ def main():
     TGM = (math.cos(ROTATIONSPEED), math.sin(ROTATIONSPEED))
     ITGM = (math.cos(-ROTATIONSPEED), math.sin(-ROTATIONSPEED))
     COS, SIN = (0,1)
+
+    dx = 0
+    dy = 0
+
+    weapon = "hands"
+    weapon_assets = build_weapon_assets(WIDTH, HEIGHT)
     
     while True:
         # Catches user input
@@ -289,6 +269,13 @@ def main():
                 if event.key == K_ESCAPE:
                     close()
                     return
+                if event.key == K_1: #손
+                    weapon = "hands" 
+                elif event.key == K_2: #권총
+                    weapon = "gun"
+                elif event.key == K_3: #칼
+                    weapon = "knife"
+                # elif event.key == K_SPACE:
                 # keys[event.key] = True
                 # NEW: 무기 전환 & 공격
                 if event.key == K_1:
@@ -323,6 +310,7 @@ def main():
             planeX = planeX * ITGM[COS] - planeY * ITGM[SIN]
             planeY = oldPlaneX * ITGM[SIN] + planeY * ITGM[COS]
 
+
         if keys[K_RIGHT]:
             oldDirectionX = directionX
             directionX = directionX * TGM[COS] - directionY * TGM[SIN]
@@ -330,18 +318,21 @@ def main():
             oldPlaneX = planeX
             planeX = planeX * TGM[COS] - planeY * TGM[SIN]
             planeY = oldPlaneX * TGM[SIN] + planeY * TGM[COS]    
+     
 
         if keys[K_UP]:
             if not worldMap[int(positionX + directionX * MOVESPEED)][int(positionY)]:
                 positionX += directionX * MOVESPEED
             if not worldMap[int(positionX)][int(positionY + directionY * MOVESPEED)]:
                 positionY += directionY * MOVESPEED
+           
                 
         if keys[K_DOWN]:
             if not worldMap[int(positionX - directionX * MOVESPEED)][int(positionY)]:
                 positionX -= directionX * MOVESPEED
             if not worldMap[int(positionX)][int(positionY - directionY * MOVESPEED)]:
                 positionY -= directionY * MOVESPEED
+            
 
         if keys[K_F1]:
             try:
@@ -379,6 +370,7 @@ def main():
         rays_for_minimap = []  # [(perpWallDistance, (rayDirectionX, rayDirectionY)), ...]
 
         # Starts drawing level from 0 to < WIDTH 
+        rays_for_minimap = [] 
         column = 0        
         while column < WIDTH:
             # Setting FOV
@@ -465,6 +457,11 @@ def main():
             pygame.draw.line(screen, color, (column,drawStart), (column, drawEnd), 2)
             rays_for_minimap.append( (perpWallDistance, (rayDirectionX, rayDirectionY)) )
             column += 2
+            rays_for_minimap.append( (perpWallDistance, (rayDirectionX, rayDirectionY)) )
+        draw_minimap(screen, worldMap, positionX, positionY, directionX, directionY, rays_for_minimap)
+        dx, dy = animation_offset(weapon)
+        draw_weapon(screen, weapon_assets, weapon, (dx, dy))
+
 
         draw_minimap(screen, worldMap, positionX, positionY, directionX, directionY, rays_for_minimap)
 

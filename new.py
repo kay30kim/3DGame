@@ -43,7 +43,7 @@ ROT_SPEED = math.radians(120)  # deg/sec
 MAP_STR = [
     "111111111111",
     "1P0000000001",
-    "100100011000",
+    "100100011001",
     "100100000001",
     "100111110001",
     "100000010001",
@@ -152,11 +152,11 @@ class Engine:
             dx -= dir_x * MOVE_SPEED * dt
             dy -= dir_y * MOVE_SPEED * dt
         if keys[pygame.K_a]:
-            dx += strafe_x * MOVE_SPEED * dt
-            dy += strafe_y * MOVE_SPEED * dt
-        if keys[pygame.K_d]:
             dx -= strafe_x * MOVE_SPEED * dt
             dy -= strafe_y * MOVE_SPEED * dt
+        if keys[pygame.K_d]:
+            dx += strafe_x * MOVE_SPEED * dt
+            dy += strafe_y * MOVE_SPEED * dt
 
         self.try_move(dx, dy)
 

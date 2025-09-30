@@ -1,0 +1,2 @@
+source venv311/bin/activate
+deactivate
