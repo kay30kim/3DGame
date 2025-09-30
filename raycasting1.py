@@ -157,14 +157,60 @@ def draw_weapon(screen, assets, weapon, xy=(0,0)):
     screen.blit(surf, rect)
     return rect
 
-def animation_offset(weapon):
-    p = random.randint(-5, 5)
-    dx = 0
-    dy = -int(14 * _ease_out_quad(p))
-    return dx, dy
+def trigger_attack(weapon, state):
+    if state.get("mode", "idle") == "idle" and state.get("cooldown", 0.0) <= 0.0:
+        if weapon == "gun":
+            state["mode"] = "attack"
+            state["t"] = 0.0
+            state["dur"] = 0.10      # 공격 애니 길이
+            state["cooldown"] = 0.20 # 쿨다운
+        elif weapon == "knife":
+            state["mode"] = "attack"
+            state["t"] = 0.0
+            state["dur"] = 0.20
+            state["cooldown"] = 0.30
+      
+  
+def animation_offset(weapon, state):
+    dur = state.get("dur", 0.1)
+    p = max(0.0, min(1.0, state.get("t", 0.0) / (dur if dur > 0 else 0.1)))
+    flash = False
+    if weapon == "knife":
+        dx = int(14 *  math.sin(p * math.pi))
+        dy = int(8  *  math.sin(p * math.pi))
+    elif weapon == "gun":
+        dx = 0
+        dy = -int(10 * math.sin(p * math.pi))
+        flash = (state.get("t", 0.0) < min(0.05, dur * 0.45))  # <- 키 에러 방지
+    else:  # hands
+        dx = 0
+        dy = -int(10 * math.sin(p * math.pi))
+    return dx, dy, flash, p
 
-def _ease_out_quad(x: float) -> float:
-    return 1.0 - (1.0 - x) * (1.0 - x)
+# def _ease_out_quad(x: float) -> float:
+#     return 1.0 - (1.0 - x) * (1.0 - x)
+  
+def update_weapon_state(weapon, state, dt):
+    if state.get("cooldown", 0.0) > 0.0:
+        state["cooldown"] -= dt
+    if state.get("mode", "idle") == "attack":
+        state["t"] += dt
+        dur = state.get("dur")
+        if state["t"] >= dur:
+            state["mode"] = "idle"
+            state["t"] = 0.0
+
+def draw_muzzle_flash(screen, weapon_rect):
+    mx = weapon_rect.right - int(weapon_rect.width * 0.12)
+    my = weapon_rect.top   + int(weapon_rect.height * 0.20)
+
+    poly = [
+        (mx, my - 8),
+        (mx + 26, my),
+        (mx, my + 8)
+    ]
+    pygame.draw.polygon(screen, (255, 245, 200), poly)
+    pygame.draw.circle(screen, (255, 240, 180), (mx + 10, my), 6)
 
 def main():
     pygame.init()
@@ -180,6 +226,11 @@ def main():
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("PyRay - Python Raycasting Engine (v0.03)")
 
+    # Animation
+    # weapon_phase = 0.0 
+    weapon_state = {"mode":"idle", "t":0.0, "cooldown":0.0, "dur":0.0}
+    clock = pygame.time.Clock()
+    
     showShadow = True
     showHUD = True    
     
@@ -212,6 +263,7 @@ def main():
         # Catches user input
         # Sets keys[key] to True or False
         # keys = pygame.key.get_pressed()
+        dt = clock.tick(60) / 1000.0
         for event in pygame.event.get():
             if event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
@@ -225,6 +277,8 @@ def main():
                     weapon = "knife"
                 # elif event.key == K_SPACE:
                 # keys[event.key] = True
+            if event.type == MOUSEBUTTONDOWN and event.button == 1:
+                trigger_attack(weapon, weapon_state)
             # elif event.type == KEYUP:
             #     keys[event.key] = False
         # Checks with keys are pressed by the user
@@ -241,6 +295,8 @@ def main():
             oldPlaneX = planeX
             planeX = planeX * ITGM[COS] - planeY * ITGM[SIN]
             planeY = oldPlaneX * ITGM[SIN] + planeY * ITGM[COS]
+            # dx, dy = animation_offset(weapon)
+
 
 
         if keys[K_RIGHT]:
@@ -250,6 +306,7 @@ def main():
             oldPlaneX = planeX
             planeX = planeX * TGM[COS] - planeY * TGM[SIN]
             planeY = oldPlaneX * TGM[SIN] + planeY * TGM[COS]    
+            # dx, dy = animation_offset(weapon)
      
 
         if keys[K_UP]:
@@ -257,6 +314,7 @@ def main():
                 positionX += directionX * MOVESPEED
             if not worldMap[int(positionX)][int(positionY + directionY * MOVESPEED)]:
                 positionY += directionY * MOVESPEED
+            # dx, dy = animation_offset(weapon)
            
                 
         if keys[K_DOWN]:
@@ -264,6 +322,7 @@ def main():
                 positionX -= directionX * MOVESPEED
             if not worldMap[int(positionX)][int(positionY - directionY * MOVESPEED)]:
                 positionY -= directionY * MOVESPEED
+            # dx, dy = animation_offset(weapon)
             
 
         if keys[K_F1]:
@@ -292,6 +351,8 @@ def main():
             showHUD = False
             print("K_F8:", keys[K_F8])
 
+        # Animation State update
+        update_weapon_state(weapon, weapon_state, dt)
             
         # Draws roof and floor
         screen.fill((25,25,25))
@@ -386,9 +447,12 @@ def main():
             column += 2
             rays_for_minimap.append( (perpWallDistance, (rayDirectionX, rayDirectionY)) )
         draw_minimap(screen, worldMap, positionX, positionY, directionX, directionY, rays_for_minimap)
-        dx, dy = animation_offset(weapon)
-        draw_weapon(screen, weapon_assets, weapon, (dx, dy))
+        dx, dy, flash_on, p = animation_offset(weapon, weapon_state)  # <- state 전달
+        rect = draw_weapon(screen, weapon_assets, weapon, (dx, dy))
 
+        # 플래시 그리기
+        if weapon == "gun" and flash_on:
+            draw_muzzle_flash(screen, rect)
 
         # Drawing HUD if showHUD is True
         if showHUD:
