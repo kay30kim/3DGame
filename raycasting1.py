@@ -159,58 +159,72 @@ def draw_weapon(screen, assets, weapon, xy=(0,0)):
 
 def trigger_attack(weapon, state):
     if state.get("mode", "idle") == "idle" and state.get("cooldown", 0.0) <= 0.0:
+        state["mode"] = "attack"
+        state["t"] = 0.0
         if weapon == "gun":
-            state["mode"] = "attack"
-            state["t"] = 0.0
-            state["dur"] = 0.10      # 공격 애니 길이
-            state["cooldown"] = 0.20 # 쿨다운
+            state["dur"] = 0.10
+            state["cooldown"] = 0.20
         elif weapon == "knife":
-            state["mode"] = "attack"
-            state["t"] = 0.0
             state["dur"] = 0.20
             state["cooldown"] = 0.30
+        else:  # hands
+            state["dur"] = 0.15
+            state["cooldown"] = 0.20
       
   
 def animation_offset(weapon, state):
+    if state.get("mode") != "attack":
+        return 0, 0, False, 0.0
     dur = state.get("dur", 0.1)
     p = max(0.0, min(1.0, state.get("t", 0.0) / (dur if dur > 0 else 0.1)))
     flash = False
+
     if weapon == "knife":
-        dx = int(14 *  math.sin(p * math.pi))
-        dy = int(8  *  math.sin(p * math.pi))
+        dx = int(14 * math.sin(p * math.pi))
+        dy = int(8  * math.sin(p * math.pi))
     elif weapon == "gun":
         dx = 0
         dy = -int(10 * math.sin(p * math.pi))
-        flash = (state.get("t", 0.0) < min(0.05, dur * 0.45))  # <- 키 에러 방지
+        flash = (state.get("t", 0.0) < min(0.05, dur * 0.45))
     else:  # hands
         dx = 0
-        dy = -int(10 * math.sin(p * math.pi))
+        dy = -int(12 * math.sin(p * math.pi))
     return dx, dy, flash, p
 
 # def _ease_out_quad(x: float) -> float:
 #     return 1.0 - (1.0 - x) * (1.0 - x)
   
-def update_weapon_state(weapon, state, dt):
+def update_weapon_state(weapon: str, state: dict, dt: float):
     if state.get("cooldown", 0.0) > 0.0:
-        state["cooldown"] -= dt
+        state["cooldown"] = max(0.0, state["cooldown"] - dt)
     if state.get("mode", "idle") == "attack":
         state["t"] += dt
-        dur = state.get("dur")
+        dur = state.get("dur", 0.1)
         if state["t"] >= dur:
             state["mode"] = "idle"
             state["t"] = 0.0
 
-def draw_muzzle_flash(screen, weapon_rect):
-    mx = weapon_rect.right - int(weapon_rect.width * 0.12)
-    my = weapon_rect.top   + int(weapon_rect.height * 0.20)
+def draw_muzzle_flash(screen, weapon_rect, p: float):
+    w, h = weapon_rect.size
 
-    poly = [
-        (mx, my - 8),
-        (mx + 26, my),
-        (mx, my + 8)
-    ]
-    pygame.draw.polygon(screen, (255, 245, 200), poly)
-    pygame.draw.circle(screen, (255, 240, 180), (mx + 10, my), 6)
+    start_x = weapon_rect.right - int(w * 0.12)
+    start_y = weapon_rect.top   + int(h * 0.52)
+
+    travel  = int(140 * p)
+    tip_len = max(1, int(22 * (1.0 - p)))
+    tip_wid = max(1, int( 8 * (1.0 - p)))
+    alpha   = max(0, int(255 * (1.0 - p)))
+
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+
+    x = (start_x - weapon_rect.left) + travel
+    y =  start_y - weapon_rect.top
+
+    pts = [(x, y), (x + tip_len, y - tip_wid), (x + tip_len, y + tip_wid)]
+    pygame.draw.polygon(surf, (255, 245, 200, alpha), pts)
+    pygame.draw.polygon(surf, (255, 255, 220, alpha), pts, width=1)
+
+    screen.blit(surf, weapon_rect.topleft)
 
 def main():
     pygame.init()
@@ -258,6 +272,8 @@ def main():
 
     weapon = "hands"
     weapon_assets = build_weapon_assets(WIDTH, HEIGHT)
+    weapon_phase = 0.0
+
     
     while True:
         # Catches user input
@@ -269,16 +285,19 @@ def main():
                 if event.key == K_ESCAPE:
                     close()
                     return
-                if event.key == K_1: #손
-                    weapon = "hands" 
-                elif event.key == K_2: #권총
+                if event.key == K_1:
+                    weapon = "hands"
+                elif event.key == K_2:
                     weapon = "gun"
-                elif event.key == K_3: #칼
+                elif event.key == K_3:
                     weapon = "knife"
-                # elif event.key == K_SPACE:
-                # keys[event.key] = True
+                elif event.key == K_SPACE:      # ← 추가
+                    trigger_attack(weapon, weapon_state)
             if event.type == MOUSEBUTTONDOWN and event.button == 1:
                 trigger_attack(weapon, weapon_state)
+            if event.type == QUIT:
+                close()
+                return
             # elif event.type == KEYUP:
             #     keys[event.key] = False
         # Checks with keys are pressed by the user
@@ -447,12 +466,23 @@ def main():
             column += 2
             rays_for_minimap.append( (perpWallDistance, (rayDirectionX, rayDirectionY)) )
         draw_minimap(screen, worldMap, positionX, positionY, directionX, directionY, rays_for_minimap)
-        dx, dy, flash_on, p = animation_offset(weapon, weapon_state)  # <- state 전달
-        rect = draw_weapon(screen, weapon_assets, weapon, (dx, dy))
+        moving = keys[K_UP] or keys[K_DOWN] or keys[K_LEFT] or keys[K_RIGHT]
+        weapon_phase += (0.12 if moving else 0.05)
 
-        # 플래시 그리기
-        if weapon == "gun" and flash_on:
-            draw_muzzle_flash(screen, rect)
+        sway_x = int(2 * math.sin(weapon_phase * 2.0))
+        sway_y = int(3 * math.sin(weapon_phase * 1.0))
+
+        dx, dy, flash_on, p = animation_offset(weapon, weapon_state)
+        dx += sway_x
+        dy += sway_y
+
+        rect = draw_weapon(screen, weapon_assets, weapon, (dx, dy))
+        if rect:
+            if weapon == "gun" and flash_on:
+                draw_muzzle_flash(screen, rect, p)
+            # if weapon == "knife" and weapon_state.get("mode") == "attack":
+            #     draw_slash_effect(screen, rect, p)
+
 
         # Drawing HUD if showHUD is True
         if showHUD:
