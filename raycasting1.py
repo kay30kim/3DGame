@@ -82,8 +82,6 @@ def draw_minimap(screen, worldMap, posX, posY, dirX, dirY, rays, scale=8, paddin
     fy = py + int(dirX / magd * 8)
     pygame.draw.line(screen, COLOR_MINI_PLAYER, (px, py), (fx, fy), 2)
 
-
-
 def draw_hands(surf):
     w, h = surf.get_size()
     skin = (235, 205, 175, 235)
@@ -226,6 +224,81 @@ def draw_muzzle_flash(screen, weapon_rect, p: float):
 
     screen.blit(surf, weapon_rect.topleft)
 
+# NPC 관련 전역 변수
+npc = {
+    "x": 7.5,
+    "y": 7.5,
+    "dir": (1, 0),
+    "move_timer": 0.0
+}
+
+def init_npc_image():
+    img = pygame.image.load("assets/npc.png").convert_alpha()
+    img = pygame.transform.scale(img, (40, 60))
+
+    for x in range(img.get_width()):
+        for y in range(img.get_height()):
+            color = img.get_at((x, y))
+            if color.a > 0:
+                color.a = 255
+                img.set_at((x, y), color)
+    return img
+
+def update_npc(npc, worldMap, dt):
+    npc["move_timer"] += dt
+    if npc["move_timer"] > 1.5:
+        npc["dir"] = random.choice([(1,0), (-1,0), (0,1), (0,-1)])
+        npc["move_timer"] = 0.0
+
+    dx, dy = npc["dir"]
+    base_speed = 1.8  # 초당 1.8 타일 이동 (즉, player MOVESPEED=0.03 × 60fps와 비슷)
+    move_speed = base_speed * dt  # 프레임 시간에 따라 이동량 보정
+
+    new_x = npc["x"] + dx * move_speed
+    new_y = npc["y"] + dy * move_speed
+
+    # 벽 충돌 체크
+    if worldMap[int(new_x)][int(npc["y"])] == 0:
+        npc["x"] = new_x
+    if worldMap[int(npc["x"])][int(new_y)] == 0:
+        npc["y"] = new_y
+
+def draw_npc_minimap(screen, npc, scale, padding):
+    px = padding + int(npc["y"] * scale)
+    py = padding + int(npc["x"] * scale)
+    pygame.draw.circle(screen, (255, 50, 50), (px, py), 5)  # ← 반지름 3 → 5
+
+def draw_npc_sprite(screen, npc, player_x, player_y, dirX, dirY, planeX, planeY, npc_img, zBuffer):
+    spriteX = npc["x"] - player_x
+    spriteY = npc["y"] - player_y
+
+    invDet = 1.0 / (planeX * dirY - dirX * planeY)
+    transformX = invDet * (dirY * spriteX - dirX * spriteY)
+    transformY = invDet * (-planeY * spriteX + planeX * spriteY)
+    if transformY <= 0:
+        return
+
+    w, h = screen.get_size()
+    sprite_screen_x = int((w / 2) * (1 + transformX / transformY))
+    sprite_height = abs(int(h / transformY))
+    sprite_width = sprite_height
+
+    draw_x = sprite_screen_x - sprite_width // 2
+    draw_y = (h // 2) - sprite_height // 2
+
+    # 스케일링 후 바로 블릿 (Surface 생성 X)
+    npc_scaled = pygame.transform.smoothscale(npc_img, (sprite_width, sprite_height)).convert_alpha()
+    npc_scaled.set_alpha(255)
+
+    # # zBuffer로 벽 뒤 가리기만 체크
+    depth_values = [zBuffer[i] for i in range(draw_x, draw_x + sprite_width, 4) if 0 <= i < w]
+    if not depth_values:
+        return
+    avg_depth = sum(depth_values) / len(depth_values)
+
+    if transformY < avg_depth:
+        screen.blit(npc_scaled, (draw_x, draw_y))
+
 def main():
     pygame.init()
 
@@ -237,9 +310,10 @@ def main():
     WIDTH = 800
     HEIGHT = 600
     WALL_HEIGHT = HEIGHT
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.DOUBLEBUF)
     pygame.display.set_caption("PyRay - Python Raycasting Engine (v0.03)")
 
+    npc_img = pygame.image.load("assets/npc.png").convert_alpha()
     # Animation
     # weapon_phase = 0.0 
     weapon_state = {"mode":"idle", "t":0.0, "cooldown":0.0, "dur":0.0}
@@ -376,10 +450,13 @@ def main():
         # Draws roof and floor
         screen.fill((25,25,25))
         pygame.draw.rect(screen, (50,50,50), (0, HEIGHT/2, WIDTH, HEIGHT/2)) 
-                
+        
+        update_npc(npc, worldMap, dt)
+
         # Starts drawing level from 0 to < WIDTH 
         rays_for_minimap = [] 
-        column = 0        
+        column = 0
+        zBuffer = [0] * WIDTH
         while column < WIDTH:
             # Setting FOV
             cameraX = 2.0 * column / WIDTH - 1.0
@@ -463,9 +540,11 @@ def main():
 
             # Drawing the graphics                           
             pygame.draw.line(screen, color, (column,drawStart), (column, drawEnd), 2)
+            zBuffer[column] = perpWallDistance  # ← 깊이 저장
             column += 2
             rays_for_minimap.append( (perpWallDistance, (rayDirectionX, rayDirectionY)) )
         draw_minimap(screen, worldMap, positionX, positionY, directionX, directionY, rays_for_minimap)
+        draw_npc_minimap(screen, npc, MINIMAP_SCALE, MINIMAP_PADDING)
         moving = keys[K_UP] or keys[K_DOWN] or keys[K_LEFT] or keys[K_RIGHT]
         weapon_phase += (0.12 if moving else 0.05)
 
@@ -476,6 +555,7 @@ def main():
         dx += sway_x
         dy += sway_y
 
+        draw_npc_sprite(screen, npc, positionX, positionY, directionX, directionY, planeX, planeY, npc_img, zBuffer)
         rect = draw_weapon(screen, weapon_assets, weapon, (dx, dy))
         if rect:
             if weapon == "gun" and flash_on:
