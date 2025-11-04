@@ -82,8 +82,6 @@ def draw_minimap(screen, worldMap, posX, posY, dirX, dirY, rays, scale=8, paddin
     fy = py + int(dirX / magd * 8)
     pygame.draw.line(screen, COLOR_MINI_PLAYER, (px, py), (fx, fy), 2)
 
-
-
 def draw_hands(surf):
     w, h = surf.get_size()
     skin = (235, 205, 175, 235)
@@ -159,58 +157,147 @@ def draw_weapon(screen, assets, weapon, xy=(0,0)):
 
 def trigger_attack(weapon, state):
     if state.get("mode", "idle") == "idle" and state.get("cooldown", 0.0) <= 0.0:
+        state["mode"] = "attack"
+        state["t"] = 0.0
         if weapon == "gun":
-            state["mode"] = "attack"
-            state["t"] = 0.0
-            state["dur"] = 0.10      # 공격 애니 길이
-            state["cooldown"] = 0.20 # 쿨다운
+            state["dur"] = 0.10
+            state["cooldown"] = 0.20
         elif weapon == "knife":
-            state["mode"] = "attack"
-            state["t"] = 0.0
             state["dur"] = 0.20
             state["cooldown"] = 0.30
+        else:  # hands
+            state["dur"] = 0.15
+            state["cooldown"] = 0.20
       
   
 def animation_offset(weapon, state):
+    if state.get("mode") != "attack":
+        return 0, 0, False, 0.0
     dur = state.get("dur", 0.1)
     p = max(0.0, min(1.0, state.get("t", 0.0) / (dur if dur > 0 else 0.1)))
     flash = False
+
     if weapon == "knife":
-        dx = int(14 *  math.sin(p * math.pi))
-        dy = int(8  *  math.sin(p * math.pi))
+        dx = int(14 * math.sin(p * math.pi))
+        dy = int(8  * math.sin(p * math.pi))
     elif weapon == "gun":
         dx = 0
         dy = -int(10 * math.sin(p * math.pi))
-        flash = (state.get("t", 0.0) < min(0.05, dur * 0.45))  # <- 키 에러 방지
+        flash = (state.get("t", 0.0) < min(0.05, dur * 0.45))
     else:  # hands
         dx = 0
-        dy = -int(10 * math.sin(p * math.pi))
+        dy = -int(12 * math.sin(p * math.pi))
     return dx, dy, flash, p
 
 # def _ease_out_quad(x: float) -> float:
 #     return 1.0 - (1.0 - x) * (1.0 - x)
   
-def update_weapon_state(weapon, state, dt):
+def update_weapon_state(weapon: str, state: dict, dt: float):
     if state.get("cooldown", 0.0) > 0.0:
-        state["cooldown"] -= dt
+        state["cooldown"] = max(0.0, state["cooldown"] - dt)
     if state.get("mode", "idle") == "attack":
         state["t"] += dt
-        dur = state.get("dur")
+        dur = state.get("dur", 0.1)
         if state["t"] >= dur:
             state["mode"] = "idle"
             state["t"] = 0.0
 
-def draw_muzzle_flash(screen, weapon_rect):
-    mx = weapon_rect.right - int(weapon_rect.width * 0.12)
-    my = weapon_rect.top   + int(weapon_rect.height * 0.20)
+def draw_muzzle_flash(screen, weapon_rect, p: float):
+    w, h = weapon_rect.size
 
-    poly = [
-        (mx, my - 8),
-        (mx + 26, my),
-        (mx, my + 8)
-    ]
-    pygame.draw.polygon(screen, (255, 245, 200), poly)
-    pygame.draw.circle(screen, (255, 240, 180), (mx + 10, my), 6)
+    start_x = weapon_rect.right - int(w * 0.12)
+    start_y = weapon_rect.top   + int(h * 0.52)
+
+    travel  = int(140 * p)
+    tip_len = max(1, int(22 * (1.0 - p)))
+    tip_wid = max(1, int( 8 * (1.0 - p)))
+    alpha   = max(0, int(255 * (1.0 - p)))
+
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+
+    x = (start_x - weapon_rect.left) + travel
+    y =  start_y - weapon_rect.top
+
+    pts = [(x, y), (x + tip_len, y - tip_wid), (x + tip_len, y + tip_wid)]
+    pygame.draw.polygon(surf, (255, 245, 200, alpha), pts)
+    pygame.draw.polygon(surf, (255, 255, 220, alpha), pts, width=1)
+
+    screen.blit(surf, weapon_rect.topleft)
+
+# NPC 관련 전역 변수
+npc = {
+    "x": 7.5,
+    "y": 7.5,
+    "dir": (1, 0),
+    "move_timer": 0.0
+}
+
+def init_npc_image():
+    img = pygame.image.load("assets/npc.png").convert_alpha()
+    img = pygame.transform.scale(img, (40, 60))
+
+    for x in range(img.get_width()):
+        for y in range(img.get_height()):
+            color = img.get_at((x, y))
+            if color.a > 0:
+                color.a = 255
+                img.set_at((x, y), color)
+    return img
+
+def update_npc(npc, worldMap, dt):
+    npc["move_timer"] += dt
+    if npc["move_timer"] > 1.5:
+        npc["dir"] = random.choice([(1,0), (-1,0), (0,1), (0,-1)])
+        npc["move_timer"] = 0.0
+
+    dx, dy = npc["dir"]
+    base_speed = 1.8  # 초당 1.8 타일 이동 (즉, player MOVESPEED=0.03 × 60fps와 비슷)
+    move_speed = base_speed * dt  # 프레임 시간에 따라 이동량 보정
+
+    new_x = npc["x"] + dx * move_speed
+    new_y = npc["y"] + dy * move_speed
+
+    # 벽 충돌 체크
+    if worldMap[int(new_x)][int(npc["y"])] == 0:
+        npc["x"] = new_x
+    if worldMap[int(npc["x"])][int(new_y)] == 0:
+        npc["y"] = new_y
+
+def draw_npc_minimap(screen, npc, scale, padding):
+    px = padding + int(npc["y"] * scale)
+    py = padding + int(npc["x"] * scale)
+    pygame.draw.circle(screen, (255, 50, 50), (px, py), 5)  # ← 반지름 3 → 5
+
+def draw_npc_sprite(screen, npc, player_x, player_y, dirX, dirY, planeX, planeY, npc_img, zBuffer):
+    spriteX = npc["x"] - player_x
+    spriteY = npc["y"] - player_y
+
+    invDet = 1.0 / (planeX * dirY - dirX * planeY)
+    transformX = invDet * (dirY * spriteX - dirX * spriteY)
+    transformY = invDet * (-planeY * spriteX + planeX * spriteY)
+    if transformY <= 0:
+        return
+
+    w, h = screen.get_size()
+    sprite_screen_x = int((w / 2) * (1 + transformX / transformY))
+    sprite_height = abs(int(h / transformY))
+    sprite_width = sprite_height
+
+    draw_x = sprite_screen_x - sprite_width // 2
+    draw_y = (h // 2) - sprite_height // 2
+
+    # 스케일링 후 바로 블릿 (Surface 생성 X)
+    npc_scaled = pygame.transform.smoothscale(npc_img, (sprite_width, sprite_height)).convert_alpha()
+    npc_scaled.set_alpha(255)
+
+    # # zBuffer로 벽 뒤 가리기만 체크
+    depth_values = [zBuffer[i] for i in range(draw_x, draw_x + sprite_width, 4) if 0 <= i < w]
+    if not depth_values:
+        return
+    avg_depth = sum(depth_values) / len(depth_values)
+
+    if transformY < avg_depth:
+        screen.blit(npc_scaled, (draw_x, draw_y))
 
 def main():
     pygame.init()
@@ -223,9 +310,10 @@ def main():
     WIDTH = 800
     HEIGHT = 600
     WALL_HEIGHT = HEIGHT
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.DOUBLEBUF)
     pygame.display.set_caption("PyRay - Python Raycasting Engine (v0.03)")
 
+    npc_img = pygame.image.load("assets/npc.png").convert_alpha()
     # Animation
     # weapon_phase = 0.0 
     weapon_state = {"mode":"idle", "t":0.0, "cooldown":0.0, "dur":0.0}
@@ -258,6 +346,8 @@ def main():
 
     weapon = "hands"
     weapon_assets = build_weapon_assets(WIDTH, HEIGHT)
+    weapon_phase = 0.0
+
     
     while True:
         # Catches user input
@@ -269,16 +359,19 @@ def main():
                 if event.key == K_ESCAPE:
                     close()
                     return
-                if event.key == K_1: #손
-                    weapon = "hands" 
-                elif event.key == K_2: #권총
+                if event.key == K_1:
+                    weapon = "hands"
+                elif event.key == K_2:
                     weapon = "gun"
-                elif event.key == K_3: #칼
+                elif event.key == K_3:
                     weapon = "knife"
-                # elif event.key == K_SPACE:
-                # keys[event.key] = True
+                elif event.key == K_SPACE:      # ← 추가
+                    trigger_attack(weapon, weapon_state)
             if event.type == MOUSEBUTTONDOWN and event.button == 1:
                 trigger_attack(weapon, weapon_state)
+            if event.type == QUIT:
+                close()
+                return
             # elif event.type == KEYUP:
             #     keys[event.key] = False
         # Checks with keys are pressed by the user
@@ -357,10 +450,13 @@ def main():
         # Draws roof and floor
         screen.fill((25,25,25))
         pygame.draw.rect(screen, (50,50,50), (0, HEIGHT/2, WIDTH, HEIGHT/2)) 
-                
+        
+        update_npc(npc, worldMap, dt)
+
         # Starts drawing level from 0 to < WIDTH 
         rays_for_minimap = [] 
-        column = 0        
+        column = 0
+        zBuffer = [0] * WIDTH
         while column < WIDTH:
             # Setting FOV
             cameraX = 2.0 * column / WIDTH - 1.0
@@ -444,15 +540,29 @@ def main():
 
             # Drawing the graphics                           
             pygame.draw.line(screen, color, (column,drawStart), (column, drawEnd), 2)
+            zBuffer[column] = perpWallDistance  # ← 깊이 저장
             column += 2
             rays_for_minimap.append( (perpWallDistance, (rayDirectionX, rayDirectionY)) )
         draw_minimap(screen, worldMap, positionX, positionY, directionX, directionY, rays_for_minimap)
-        dx, dy, flash_on, p = animation_offset(weapon, weapon_state)  # <- state 전달
-        rect = draw_weapon(screen, weapon_assets, weapon, (dx, dy))
+        draw_npc_minimap(screen, npc, MINIMAP_SCALE, MINIMAP_PADDING)
+        moving = keys[K_UP] or keys[K_DOWN] or keys[K_LEFT] or keys[K_RIGHT]
+        weapon_phase += (0.12 if moving else 0.05)
 
-        # 플래시 그리기
-        if weapon == "gun" and flash_on:
-            draw_muzzle_flash(screen, rect)
+        sway_x = int(2 * math.sin(weapon_phase * 2.0))
+        sway_y = int(3 * math.sin(weapon_phase * 1.0))
+
+        dx, dy, flash_on, p = animation_offset(weapon, weapon_state)
+        dx += sway_x
+        dy += sway_y
+
+        draw_npc_sprite(screen, npc, positionX, positionY, directionX, directionY, planeX, planeY, npc_img, zBuffer)
+        rect = draw_weapon(screen, weapon_assets, weapon, (dx, dy))
+        if rect:
+            if weapon == "gun" and flash_on:
+                draw_muzzle_flash(screen, rect, p)
+            # if weapon == "knife" and weapon_state.get("mode") == "attack":
+            #     draw_slash_effect(screen, rect, p)
+
 
         # Drawing HUD if showHUD is True
         if showHUD:
