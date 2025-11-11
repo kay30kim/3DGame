@@ -1,146 +1,74 @@
-# try:
-import random
-import os
 import math
-import time
+import os
+import sys
 import pygame
 from pygame.locals import *
-import os  # NEW
 
-# except ImportError:
-#     print("PyRay could not import necessary modules")
-#     raise ImportError
+# ---------------- Config ----------------
+WIDTH, HEIGHT = 1000, 700
+HALF_W, HALF_H = WIDTH // 2, HEIGHT // 2
+FPS = 60
+FOV = math.radians(70)
+MAX_DEPTH = 20.0
 
-# A map over the world
-worldMap =  [
-            [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-            [2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 2, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 2, 3, 2, 3, 0, 0, 2],
-            [2, 0, 3, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-            [2, 3, 1, 0, 0, 2, 0, 0, 0, 2, 3, 2, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 2, 0, 0, 0, 2],
-            [2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 2, 0, 0, 2, 1, 0, 0, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, 1, 0, 0, 0, 0, 0, 0, 0, 2],
-            [2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 2, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-            [2, 0, 3, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2, 3, 2, 1, 2, 0, 1],
-            [1, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 2, 0, 0, 2],
-            [2, 3, 1, 0, 0, 2, 0, 0, 2, 1, 3, 2, 0, 2, 0, 0, 3, 0, 3, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 1, 0, 0, 2, 0, 0, 2],
-            [2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 3, 0, 1, 2, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 3, 0, 2],
-            [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 1],
-            [2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1]]
+worldMap = [
+    [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 2, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 2, 3, 2, 3, 0, 0, 2],
+    [2, 0, 3, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 3, 1, 0, 0, 2, 0, 0, 0, 2, 3, 2, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 2, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 2, 0, 0, 2, 1, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, 1, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 2, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 3, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2, 3, 2, 1, 2, 0, 1],
+    [1, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 2, 0, 0, 2],
+    [2, 3, 1, 0, 0, 2, 0, 0, 2, 1, 3, 2, 0, 2, 0, 0, 3, 0, 3, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 1, 0, 0, 2, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 3, 0, 1, 2, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 3, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 1],
+    [2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1],
+]
 
-# Closes the program 
-def close(): 
+MAP_H = len(worldMap)
+MAP_W = len(worldMap[0])
+
+PROJ_PLANE_DIST = (WIDTH / 2) / math.tan(FOV / 2)
+
+COLOR_BG = (15, 15, 22)
+COLOR_CEIL = (25, 25, 35)
+COLOR_FLOOR = (18, 18, 24)
+COLOR_MINI_WALL = (60, 60, 80)
+COLOR_MINI_FREE = (25, 25, 30)
+COLOR_MINI_PLAYER = (120, 200, 255)
+COLOR_RAY = (255, 220, 90)
+
+MINIMAP_SCALE = 8
+MINIMAP_PADDING = 10
+
+
+# ---------------- Utils ----------------
+def close():
     pygame.display.quit()
     pygame.quit()
-
-def draw_minimap(screen, worldMap, posX, posY, dirX, dirY, rays,
-                 scale=8, padding=10):
-    """
-    screen: pygame Surface
-    worldMap: 2D list[int] (0 = free, >0 = wall)
-    posX, posY: player position in world units (map cells)
-    dirX, dirY: player facing direction vector (normalized-ish)
-    rays: list of tuples (perp_dist, (rayDirX, rayDirY))
-    scale: pixels per map cell on minimap
-    padding: minimap margin from top-left
-    """
-    MAP_H = len(worldMap)
-    MAP_W = len(worldMap[0]) if MAP_H else 0
-
-    mm_w = MAP_W * scale
-    mm_h = MAP_H * scale
-    ox, oy = padding, padding
-
-    COLOR_BG_BORDER = (12, 12, 16)
-    COLOR_MINI_WALL  = (80, 80, 100)
-    COLOR_MINI_FREE  = (28, 28, 32)
-    COLOR_RAY        = (255, 215, 0)
-    COLOR_PLAYER     = (50, 200, 255)
-
-    # background
-    pygame.draw.rect(screen, COLOR_BG_BORDER, (ox - 2, oy - 2, mm_w + 4, mm_h + 4), border_radius=6)
-
-    # tiles
-    for r in range(MAP_H):
-        for c in range(MAP_W):
-            rect = pygame.Rect(ox + c * scale, oy + r * scale, scale, scale)
-            if worldMap[r][c] != 0:
-                pygame.draw.rect(screen, COLOR_MINI_WALL, rect)
-            else:
-                pygame.draw.rect(screen, COLOR_MINI_FREE, rect)
-
-    # rays (downsample to avoid overdraw)
-    if rays:
-        step = max(1, len(rays) // 120)
-        px = ox + int(posY * scale)  # NOTE: map indexing worldMap[row][col] = [x][y]
-        py = oy + int(posX * scale)  # but in your engine posX ~ mapX, posY ~ mapY
-        # 위 두 줄은 엔진의 좌표 사용 방식(X/Y ↔ row/col)을 맞추기 위한 보정.
-        # 만약 맵 인덱싱/좌표가 일치한다면 px/py 계산을 (posX,posY) 그대로 써도 됨.
-
-        for i in range(0, len(rays), step):
-            dist, (rDx, rDy) = rays[i]
-            # 방향 정규화 후, 거리(perp)만큼 쏴서 끝점
-            mag = math.hypot(rDx, rDy) or 1.0
-            ux, uy = rDx / mag, rDy / mag
-            rx = px + int(uy * dist * scale)  # 좌표계 축 교차 보정
-            ry = py + int(ux * dist * scale)
-            pygame.draw.line(screen, COLOR_RAY, (px, py), (rx, ry), 1)
-
-    # player
-    px = ox + int(posY * scale)
-    py = oy + int(posX * scale)
-    pygame.draw.circle(screen, COLOR_PLAYER, (px, py), 3)
-
-    # facing indicator (direction vector)
-    magd = math.hypot(dirX, dirY) or 1.0
-    fx = px + int(dirY / magd * 8)
-    fy = py + int(dirX / magd * 8)
-    pygame.draw.line(screen, COLOR_PLAYER, (px, py), (fx, fy), 2)
-
-def draw_hands(surf):
-    w, h = surf.get_size()
-    skin = (235, 205, 175, 235)
-    shade = (210, 180, 150, 235)
-    pygame.draw.ellipse(surf, skin,  (int(w*0.05),  int(h*0.50), int(w*0.40), int(h*0.45)))
-    pygame.draw.ellipse(surf, skin,  (int(w*0.55),  int(h*0.50), int(w*0.40), int(h*0.45)))
-    pygame.draw.ellipse(surf, shade, (int(w*0.08),  int(h*0.68), int(w*0.16), int(h*0.18)))
-    pygame.draw.ellipse(surf, shade, (int(w*0.62),  int(h*0.68), int(w*0.16), int(h*0.18)))
+    sys.exit(0)
 
 
-def draw_knife(surf):
-    draw_hands(surf)
-    w, h = surf.get_size()
-    handle = (30, 30, 30, 255)
-    blade  = (200, 200, 210, 255)
-    pygame.draw.rect(surf, handle, (int(w*0.45), int(h*0.60), int(w*0.10), int(h*0.20)), border_radius=4)
-    pygame.draw.polygon(
-        surf, blade,
-        [(int(w*0.50), int(h*0.60)),
-         (int(w*0.70), int(h*0.30)),
-         (int(w*0.58), int(h*0.60))]
-    )
+def is_wall(x, y):
+    if x < 0 or y < 0 or x >= MAP_W or y >= MAP_H:
+        return True
+    return worldMap[int(y)][int(x)] > 0
 
-def _draw_gun_placeholder(surf):
-    _draw_hands_placeholder(surf)
-    w, h = surf.get_size()
-    body  = (35, 35, 45, 255)
-    grip  = (25, 25, 30, 255)
-    barrel= (55, 55, 65, 255)
-    pygame.draw.rect(surf, body,   (int(w*0.35), int(h*0.48), int(w*0.30), int(h*0.14)), border_radius=6)
-    pygame.draw.rect(surf, grip,   (int(w*0.52), int(h*0.58), int(w*0.10), int(h*0.18)), border_radius=4)
-    pygame.draw.rect(surf, barrel, (int(w*0.62), int(h*0.52), int(w*0.18), int(h*0.08)), border_radius=4)
-  
-def load_or_make(path, size, draw_fn):
+
+# ---------------- Weapon sprites (improved) ----------------
+def _load_or_make(path, size, draw_fn):
     w, h = size
     try:
         if os.path.exists(path):
-            print(".")
             img = pygame.image.load(path).convert_alpha()
             return pygame.transform.smoothscale(img, (w, h))
     except Exception:
@@ -149,457 +77,478 @@ def load_or_make(path, size, draw_fn):
     draw_fn(surf)
     return surf
 
-def build_weapon_assets(view_w, view_h):
-    base_w = max(240, view_w // 3)
-    base_h = max(180, view_h // 3)
-    assets = {
-        "hands": _load_or_make("assets/hands.png", (base_w, base_h), _draw_hands_placeholder),
-        "knife": _load_or_make("assets/knife.png", (base_w, base_h), _draw_knife_placeholder),
-        "gun":   _load_or_make("assets/gun.png",   (base_w, base_h), _draw_gun_placeholder),
-    }
-    return assets
+def _draw_hand_pair(surf):
+    w, h = surf.get_size()
+    skin = (225, 200, 170, 255)
+    shadow = (200, 180, 150, 255)
 
-def draw_weapon(screen, assets, selected, sway_xy=(0,0)):
-    """현재 선택된 무기를 화면 하단 중앙에 그린다(약간의 흔들림 적용). 반환값: blit된 rect"""
+    pygame.draw.rect(
+        surf, skin,
+        (int(w * 0.18), int(h * 0.55), int(w * 0.16), int(h * 0.30)),
+        border_radius=6,
+    )
+    pygame.draw.rect(
+        surf, shadow,
+        (int(w * 0.18), int(h * 0.78), int(w * 0.16), int(h * 0.07)),
+        border_radius=4,
+    )
+    pygame.draw.rect(
+        surf, skin,
+        (int(w * 0.66), int(h * 0.55), int(w * 0.16), int(h * 0.30)),
+        border_radius=6,
+    )
+    pygame.draw.rect(
+        surf, shadow,
+        (int(w * 0.66), int(h * 0.78), int(w * 0.16), int(h * 0.07)),
+        border_radius=4,
+    )
+
+def _draw_hands_only(surf):
+    _draw_hand_pair(surf)
+
+def _draw_gun_fps(surf):
+    w, h = surf.get_size()
+    _draw_hand_pair(surf)
+
+    body = (28, 28, 34, 255)
+    slide = (52, 52, 64, 255)
+    grip = (24, 24, 30, 255)
+    accent = (110, 180, 255, 255)
+
+    slide_x = int(w * 0.40)
+    slide_y = int(h * 0.40)
+    slide_w = int(w * 0.30)
+    slide_h = int(h * 0.10)
+    pygame.draw.rect(surf, slide, (slide_x, slide_y, slide_w, slide_h), border_radius=3)
+
+    body_x = slide_x
+    body_y = slide_y + slide_h - 2
+    body_w = int(w * 0.22)
+    body_h = int(h * 0.09)
+    pygame.draw.rect(surf, body, (body_x, body_y, body_w, body_h), border_radius=3)
+
+    grip_x = body_x + int(w * 0.04)
+    grip_y = body_y + body_h - 2
+    grip_w = int(w * 0.08)
+    grip_h = int(h * 0.16)
+    pygame.draw.rect(surf, grip, (grip_x, grip_y, grip_w, grip_h), border_radius=4)
+
+    barrel_w = int(w * 0.10)
+    barrel_h = int(h * 0.05)
+    barrel_x = slide_x + slide_w - barrel_w
+    barrel_y = slide_y + int(slide_h * 0.22)
+    pygame.draw.rect(surf, slide, (barrel_x, barrel_y, barrel_w, barrel_h), border_radius=2)
+
+    pygame.draw.rect(
+        surf, accent,
+        (slide_x + int(w * 0.01), slide_y + int(h * 0.03), int(w * 0.05), int(h * 0.01))
+    )
+
+
+def _draw_knife_fps(surf):
+    w, h = surf.get_size()
+    _draw_hand_pair(surf)
+
+    handle = (30, 30, 32, 255)
+    guard = (80, 80, 90, 255)
+    blade = (210, 210, 220, 255)
+
+    handle_w = int(w * 0.06)
+    handle_h = int(h * 0.16)
+    handle_x = int(w * 0.55)
+    handle_y = int(h * 0.46)
+    pygame.draw.rect(surf, handle, (handle_x, handle_y, handle_w, handle_h), border_radius=4)
+
+    guard_w = int(w * 0.10)
+    guard_h = int(h * 0.015)
+    guard_x = handle_x - int((guard_w - handle_w) / 2)
+    guard_y = handle_y - guard_h
+    pygame.draw.rect(surf, guard, (guard_x, guard_y, guard_w, guard_h), border_radius=3)
+
+    blade_len = int(w * 0.22)
+    blade_h_half = int(h * 0.05)
+    tip_x = guard_x + blade_len
+    tip_y = guard_y - int(h * 0.01)
+
+    pygame.draw.polygon(
+        surf,
+        blade,
+        [
+            (guard_x, guard_y),
+            (tip_x, tip_y),
+            (guard_x, guard_y - blade_h_half),
+        ],
+    )
+
+def build_weapon_assets(view_w, view_h):
+    base_w = max(280, view_w // 3)
+    base_h = max(190, view_h // 3)
+
+    return {
+        "hands": _load_or_make("assets/hands.png", (base_w, base_h), _draw_hands_only),
+        "gun":   _load_or_make("assets/gun.png",   (base_w, base_h), _draw_gun_fps),
+        "knife": _load_or_make("assets/knife.png", (base_w, base_h), _draw_knife_fps),
+    }
+
+def draw_weapon(screen, assets, selected, sway_xy=(0, 0)):
     surf = assets.get(selected)
     if not surf:
         return None
     w, h = screen.get_size()
     ox, oy = sway_xy
     rect = surf.get_rect()
-    rect.midbottom = (w // 2 + ox, h - 8 + oy)  # 아래 여백 8px
+    rect.midbottom = (w // 2 + ox, h - 6 + oy)
     screen.blit(surf, rect)
     return rect
 
-def trigger_attack(weapon, state):
-    if state.get("mode", "idle") == "idle" and state.get("cooldown", 0.0) <= 0.0:
-        state["mode"] = "attack"
-        state["t"] = 0.0
-        if weapon == "gun":
-            state["dur"] = 0.10
-            state["cooldown"] = 0.20
-        elif weapon == "knife":
-            state["dur"] = 0.20
-            state["cooldown"] = 0.30
-        else:  # hands
-            state["dur"] = 0.15
-            state["cooldown"] = 0.20
-      
-  
-def animation_offset(weapon, state):
-    if state.get("mode") != "attack":
-        return 0, 0, False, 0.0
-    dur = state.get("dur", 0.1)
-    p = max(0.0, min(1.0, state.get("t", 0.0) / (dur if dur > 0 else 0.1)))
-    flash = False
-
+def _attack_spec(weapon):
+    # (duration, cooldown)
+    if weapon == "gun":
+        return (0.10, 0.12)
     if weapon == "knife":
-        dx = int(14 * math.sin(p * math.pi))
-        dy = int(8  * math.sin(p * math.pi))
-    elif weapon == "gun":
-        dx = 0
-        dy = -int(10 * math.sin(p * math.pi))
-        flash = (state.get("t", 0.0) < min(0.05, dur * 0.45))
-    else:  # hands
-        dx = 0
-        dy = -int(12 * math.sin(p * math.pi))
-    return dx, dy, flash, p
+        return (0.18, 0.22)
+    return (0.14, 0.20)
 
-# def _ease_out_quad(x: float) -> float:
-#     return 1.0 - (1.0 - x) * (1.0 - x)
-  
-def update_weapon_state(weapon: str, state: dict, dt: float):
+def trigger_attack(weapon, state):
+    if state.get("mode", "idle") != "idle":
+        return
     if state.get("cooldown", 0.0) > 0.0:
-        state["cooldown"] = max(0.0, state["cooldown"] - dt)
+        return
+    dur, cd = _attack_spec(weapon)
+    state["mode"] = "attack"
+    state["t"] = 0.0
+    state["dur"] = dur
+    state["cooldown"] = cd
+
+
+def update_weapon_state(weapon, state, dt):
+    if state.get("cooldown", 0.0) > 0.0:
+        state["cooldown"] -= dt
+        if state["cooldown"] < 0.0:
+            state["cooldown"] = 0.0
     if state.get("mode", "idle") == "attack":
         state["t"] += dt
-        dur = state.get("dur", 0.1)
-        if state["t"] >= dur:
+        if state["t"] >= state.get("dur", _attack_spec(weapon)[0]):
             state["mode"] = "idle"
-            state["t"] = 0.0
 
-def draw_muzzle_flash(screen, weapon_rect, p: float):
-    w, h = weapon_rect.size
+def weapon_anim_offsets(weapon, state):
+    mode = state.get("mode", "idle")
+    t = state.get("t", 0.0)
+    dur = state.get("dur", _attack_spec(weapon)[0])
 
-    start_x = weapon_rect.right - int(w * 0.12)
-    start_y = weapon_rect.top   + int(h * 0.52)
+    if mode != "attack" or dur <= 0:
+        return (0, 0), False, 0.0
 
-    travel  = int(140 * p)
-    tip_len = max(1, int(22 * (1.0 - p)))
-    tip_wid = max(1, int( 8 * (1.0 - p)))
-    alpha   = max(0, int(255 * (1.0 - p)))
+    p = max(0.0, min(1.0, t / dur))
 
-    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    if weapon == "gun":
+        up = -10 * math.sin(p * math.pi)
+        return (0, int(up)), (p < 0.25), 0.0
 
-    x = (start_x - weapon_rect.left) + travel
-    y =  start_y - weapon_rect.top
+    if weapon == "knife":
+        forward = -18 * math.sin(p * math.pi)
+        side = 8 * math.sin(p * math.pi)
+        return (int(side), int(forward)), False, p
 
-    pts = [(x, y), (x + tip_len, y - tip_wid), (x + tip_len, y + tip_wid)]
-    pygame.draw.polygon(surf, (255, 245, 200, alpha), pts)
-    pygame.draw.polygon(surf, (255, 255, 220, alpha), pts, width=1)
+    up = -8 * math.sin(p * math.pi)
+    return (0, int(up)), False, 0.0
 
-    screen.blit(surf, weapon_rect.topleft)
 
-# NPC 관련 전역 변수
-npc = {
-    "x": 7.5,
-    "y": 7.5,
-    "dir": (1, 0),
-    "move_timer": 0.0
-}
+def draw_muzzle_flash(screen, weapon_rect):
+    x = weapon_rect.right - 26
+    y = weapon_rect.top + 18
+    pygame.draw.rect(screen, (255, 245, 210), (x, y, 18, 10))
+    pygame.draw.rect(screen, (255, 220, 160), (x - 4, y + 3, 10, 6))
 
-def init_npc_image():
-    img = pygame.image.load("assets/npc.png").convert_alpha()
-    img = pygame.transform.scale(img, (40, 60))
 
-    for x in range(img.get_width()):
-        for y in range(img.get_height()):
-            color = img.get_at((x, y))
-            if color.a > 0:
-                color.a = 255
-                img.set_at((x, y), color)
-    return img
+def draw_slash_effect(screen, weapon_rect, p):
+    alpha = max(0, int(255 * (1.0 - p)))
+    color = (255, 255, 255, alpha)
+    surf = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
 
-def update_npc(npc, worldMap, dt):
-    npc["move_timer"] += dt
-    if npc["move_timer"] > 1.5:
-        npc["dir"] = random.choice([(1,0), (-1,0), (0,1), (0,-1)])
-        npc["move_timer"] = 0.0
+    x1 = weapon_rect.centerx - int(28 * (1 - p))
+    y1 = weapon_rect.centery - 20
+    x2 = weapon_rect.centerx + int(32 * (1 - p))
+    y2 = weapon_rect.centery + 6
 
-    dx, dy = npc["dir"]
-    base_speed = 1.8  # 초당 1.8 타일 이동 (즉, player MOVESPEED=0.03 × 60fps와 비슷)
-    move_speed = base_speed * dt  # 프레임 시간에 따라 이동량 보정
+    pygame.draw.line(surf, color, (x1, y1), (x2, y2), 2)
+    screen.blit(surf, (0, 0))
 
-    new_x = npc["x"] + dx * move_speed
-    new_y = npc["y"] + dy * move_speed
+# ---------------- Minimap ----------------
+def draw_minimap(screen, pos_x, pos_y, dir_x, dir_y, rays):
+    mm_w = MAP_W * MINIMAP_SCALE
+    mm_h = MAP_H * MINIMAP_SCALE
+    ox, oy = MINIMAP_PADDING, MINIMAP_PADDING
 
-    # 벽 충돌 체크
-    if worldMap[int(new_x)][int(npc["y"])] == 0:
-        npc["x"] = new_x
-    if worldMap[int(npc["x"])][int(new_y)] == 0:
-        npc["y"] = new_y
+    pygame.draw.rect(screen, (12, 12, 16), (ox - 2, oy - 2, mm_w + 4, mm_h + 4), border_radius=6)
 
-def draw_npc_minimap(screen, npc, scale, padding):
-    px = padding + int(npc["y"] * scale)
-    py = padding + int(npc["x"] * scale)
-    pygame.draw.circle(screen, (255, 50, 50), (px, py), 5)  # ← 반지름 3 → 5
+    for y in range(MAP_H):
+        for x in range(MAP_W):
+            rect = pygame.Rect(ox + x * MINIMAP_SCALE,
+                               oy + y * MINIMAP_SCALE,
+                               MINIMAP_SCALE,
+                               MINIMAP_SCALE)
+            if worldMap[y][x] != 0:
+                pygame.draw.rect(screen, COLOR_MINI_WALL, rect)
+            else:
+                pygame.draw.rect(screen, COLOR_MINI_FREE, rect)
 
-def draw_npc_sprite(screen, npc, player_x, player_y, dirX, dirY, planeX, planeY, npc_img, zBuffer):
-    spriteX = npc["x"] - player_x
-    spriteY = npc["y"] - player_y
+    if rays:
+        step = max(1, len(rays) // 120)
+        px = ox + int(pos_x * MINIMAP_SCALE)
+        py = oy + int(pos_y * MINIMAP_SCALE)
+        for i in range(0, len(rays), step):
+            dist, ang = rays[i]
+            rx = px + int(math.cos(ang) * dist * MINIMAP_SCALE)
+            ry = py + int(math.sin(ang) * dist * MINIMAP_SCALE)
+            pygame.draw.line(screen, COLOR_RAY, (px, py), (rx, ry), 1)
 
-    invDet = 1.0 / (planeX * dirY - dirX * planeY)
-    transformX = invDet * (dirY * spriteX - dirX * spriteY)
-    transformY = invDet * (-planeY * spriteX + planeX * spriteY)
-    if transformY <= 0:
-        return
+    px = ox + int(pos_x * MINIMAP_SCALE)
+    py = oy + int(pos_y * MINIMAP_SCALE)
+    pygame.draw.circle(screen, COLOR_MINI_PLAYER, (px, py), 3)
+    mag = math.hypot(dir_x, dir_y) or 1.0
+    fx = px + int(dir_x / mag * 8)
+    fy = py + int(dir_y / mag * 8)
+    pygame.draw.line(screen, COLOR_MINI_PLAYER, (px, py), (fx, fy), 2)
 
-    w, h = screen.get_size()
-    sprite_screen_x = int((w / 2) * (1 + transformX / transformY))
-    sprite_height = abs(int(h / transformY))
-    sprite_width = sprite_height
+# ---------------- Raycasting ----------------
+def cast_rays(pos_x, pos_y, dir_x, dir_y, plane_x, plane_y):
+    zbuffer = [MAX_DEPTH] * WIDTH
+    rays_for_minimap = []
 
-    draw_x = sprite_screen_x - sprite_width // 2
-    draw_y = (h // 2) - sprite_height // 2
+    for col in range(WIDTH):
+        camera_x = 2.0 * col / WIDTH - 1.0
+        ray_dir_x = dir_x + plane_x * camera_x
+        ray_dir_y = dir_y + plane_y * camera_x
 
-    # 스케일링 후 바로 블릿 (Surface 생성 X)
-    npc_scaled = pygame.transform.smoothscale(npc_img, (sprite_width, sprite_height)).convert_alpha()
-    npc_scaled.set_alpha(255)
+        map_x = int(pos_x)
+        map_y = int(pos_y)
 
-    # # zBuffer로 벽 뒤 가리기만 체크
-    depth_values = [zBuffer[i] for i in range(draw_x, draw_x + sprite_width, 4) if 0 <= i < w]
-    if not depth_values:
-        return
-    avg_depth = sum(depth_values) / len(depth_values)
+        delta_x = abs(1.0 / ray_dir_x) if ray_dir_x != 0 else 1e30
+        delta_y = abs(1.0 / ray_dir_y) if ray_dir_y != 0 else 1e30
 
-    if transformY < avg_depth:
-        screen.blit(npc_scaled, (draw_x, draw_y))
+        if ray_dir_x < 0:
+            step_x = -1
+            side_x = (pos_x - map_x) * delta_x
+        else:
+            step_x = 1
+            side_x = (map_x + 1.0 - pos_x) * delta_x
 
+        if ray_dir_y < 0:
+            step_y = -1
+            side_y = (pos_y - map_y) * delta_y
+        else:
+            step_y = 1
+            side_y = (map_y + 1.0 - pos_y) * delta_y
+
+        hit = False
+        side = 0
+
+        for _ in range(256):
+            if side_x < side_y:
+                side_x += delta_x
+                map_x += step_x
+                side = 0
+            else:
+                side_y += delta_y
+                map_y += step_y
+                side = 1
+
+            if map_x < 0 or map_y < 0 or map_x >= MAP_W or map_y >= MAP_H:
+                break
+
+            if worldMap[map_y][map_x] > 0:
+                hit = True
+                break
+
+        if not hit:
+            zbuffer[col] = MAX_DEPTH
+            rays_for_minimap.append((MAX_DEPTH, math.atan2(ray_dir_y, ray_dir_x)))
+            continue
+
+        if side == 0:
+            perp = (map_x - pos_x + (1 - step_x) / 2.0) / (ray_dir_x or 1e-6)
+        else:
+            perp = (map_y - pos_y + (1 - step_y) / 2.0) / (ray_dir_y or 1e-6)
+
+        if perp <= 0:
+            perp = 0.0001
+
+        zbuffer[col] = perp
+        rays_for_minimap.append((perp, math.atan2(ray_dir_y, ray_dir_x)))
+
+    return zbuffer, rays_for_minimap
+
+
+def render_walls(screen, zbuffer):
+    screen.fill(COLOR_BG)
+    pygame.draw.rect(screen, COLOR_CEIL, (0, 0, WIDTH, HALF_H))
+    pygame.draw.rect(screen, COLOR_FLOOR, (0, HALF_H, WIDTH, HALF_H))
+
+    for col, dist in enumerate(zbuffer):
+        if dist >= MAX_DEPTH:
+            continue
+
+        # 깊이에 따른 간단한 명암 (깨끗한 벽)
+        shade = max(0.15, min(1.0, 4.0 / (dist + 0.2)))
+        base = 190
+        color = (int(base * shade), int(base * shade), int((base + 10) * shade))
+
+        line_h = int((1.0 / dist) * PROJ_PLANE_DIST)
+        y1 = HALF_H - line_h // 2
+        y2 = HALF_H + line_h // 2
+
+        pygame.draw.line(screen, color, (col, y1), (col, y2))
+
+# ---------------- Main ----------------
 def main():
     pygame.init()
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("PyRay — clean raycasting + weapon overlay")
 
-    # Head Up Display information (HUD)
-    font = pygame.font.SysFont("Verdana",20)
-    HUD = font.render("F1 / F2 - Screenshot JPEG/BMP   F5/F6 - Shadows on/off   F7/F8 - HUD Show/Hide", True, (0,0,0))
-
-    # Creates window 
-    WIDTH = 1000
-    HEIGHT = 700
-    WALL_HEIGHT = HEIGHT
-    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.DOUBLEBUF)
-    pygame.display.set_caption("PyRay - Python Raycasting Engine (v0.03)")
-
-    npc_img = pygame.image.load("assets/npc.png").convert_alpha()
-    # Animation
-    # weapon_phase = 0.0 
-    weapon_state = {"mode":"idle", "t":0.0, "cooldown":0.0, "dur":0.0}
+    font = pygame.font.SysFont("consolas", 16)
     clock = pygame.time.Clock()
-    
-    showShadow = True
-    showHUD = True    
-    
-    # Defines starting position and direction
-    positionX = 3.0
-    positionY = 7.0
 
-    directionX = 1.0
-    directionY = 0.0
+    pos_x, pos_y = 3.0, 7.0
+    dir_x, dir_y = 1.0, 0.0
+    plane_x, plane_y = 0.0, 0.66
 
-    planeX = 0.0
-    planeY = 0.5
+    move_speed = 3.0
+    rot_speed = math.radians(120)
 
-    # Movement constants   
-    ROTATIONSPEED = 0.02
-    MOVESPEED = 0.03
+    show_minimap = True
+    show_hud = True
 
-    # Trigeometric tuples + variables for index
-    TGM = (math.cos(ROTATIONSPEED), math.sin(ROTATIONSPEED))
-    ITGM = (math.cos(-ROTATIONSPEED), math.sin(-ROTATIONSPEED))
-    COS, SIN = (0,1)
-
-    dx = 0
-    dy = 0
-
-    weapon = "hands"
+    selected_weapon = "hands"
     weapon_assets = build_weapon_assets(WIDTH, HEIGHT)
+    weapon_state = {"mode": "idle", "t": 0.0, "cooldown": 0.0, "dur": 0.0}
     weapon_phase = 0.0
 
-    
-    while True:
-        # Catches user input
-        # Sets keys[key] to True or False
-        # keys = pygame.key.get_pressed()
-        dt = clock.tick(60) / 1000.0
+    running = True
+    while running:
+        dt = clock.tick(FPS) / 1000.0
+
         for event in pygame.event.get():
-            if event.type == KEYDOWN:
+            if event.type == QUIT:
+                running = False
+            elif event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
-                    close()
-                    return
-                if event.key == K_1:
-                    weapon = "hands"
+                    running = False
+                elif event.key == K_F7:
+                    show_hud = not show_hud
+                elif event.key == K_F9:
+                    show_minimap = not show_minimap
+                elif event.key == K_1:
+                    selected_weapon = "hands"
                 elif event.key == K_2:
-                    weapon = "gun"
+                    selected_weapon = "gun"
                 elif event.key == K_3:
-                    weapon = "knife"
-                elif event.key == K_SPACE:      # ← 추가
-                    trigger_attack(weapon, weapon_state)
-            if event.type == MOUSEBUTTONDOWN and event.button == 1:
-                trigger_attack(weapon, weapon_state)
-            if event.type == QUIT:
-                close()
-                return
-            # elif event.type == KEYUP:
-            #     keys[event.key] = False
-            # NEW: 창 닫기(X) & 마우스 좌클릭 공격
-            if event.type == QUIT:
-                close()
-                return
-            if event.type == MOUSEBUTTONDOWN and event.button == 1:
+                    selected_weapon = "knife"
+                elif event.key == K_SPACE:
+                    trigger_attack(selected_weapon, weapon_state)
+            elif event.type == MOUSEBUTTONDOWN and event.button == 1:
                 trigger_attack(selected_weapon, weapon_state)
 
-        # Checks with keys are pressed by the user
-        # Uses if so that more than one button at a time can be pressed.  
         keys = pygame.key.get_pressed()
 
-        if keys[K_ESCAPE]:
-            close()
+        # 이동 (WASD + 방향키)
+        fx, fy = dir_x, dir_y
+        rx, ry = dir_y, -dir_x
 
+        if keys[K_w] or keys[K_UP]:
+            nx = pos_x + fx * move_speed * dt
+            ny = pos_y + fy * move_speed * dt
+            if not is_wall(nx, pos_y):
+                pos_x = nx
+            if not is_wall(pos_x, ny):
+                pos_y = ny
+
+        if keys[K_s] or keys[K_DOWN]:
+            nx = pos_x - fx * move_speed * dt
+            ny = pos_y - fy * move_speed * dt
+            if not is_wall(nx, pos_y):
+                pos_x = nx
+            if not is_wall(pos_x, ny):
+                pos_y = ny
+
+        if keys[K_a]:
+            nx = pos_x - rx * move_speed * dt
+            ny = pos_y - ry * move_speed * dt
+            if not is_wall(nx, pos_y):
+                pos_x = nx
+            if not is_wall(pos_x, ny):
+                pos_y = ny
+
+        if keys[K_d]:
+            nx = pos_x + rx * move_speed * dt
+            ny = pos_y + ry * move_speed * dt
+            if not is_wall(nx, pos_y):
+                pos_x = nx
+            if not is_wall(pos_x, ny):
+                pos_y = ny
+
+        # 회전 (좌/우)
         if keys[K_LEFT]:
-            oldDirectionX = directionX
-            directionX = directionX * ITGM[COS] - directionY * ITGM[SIN]
-            directionY = oldDirectionX * ITGM[SIN] + directionY * ITGM[COS]
-            oldPlaneX = planeX
-            planeX = planeX * ITGM[COS] - planeY * ITGM[SIN]
-            planeY = oldPlaneX * ITGM[SIN] + planeY * ITGM[COS]
-            # dx, dy = animation_offset(weapon)
-
-
+            ang = -rot_speed * dt
+            ca, sa = math.cos(ang), math.sin(ang)
+            ndx = dir_x * ca - dir_y * sa
+            ndy = dir_x * sa + dir_y * ca
+            dir_x, dir_y = ndx, ndy
+            npx = plane_x * ca - plane_y * sa
+            npy = plane_x * sa + plane_y * ca
+            plane_x, plane_y = npx, npy
 
         if keys[K_RIGHT]:
-            oldDirectionX = directionX
-            directionX = directionX * TGM[COS] - directionY * TGM[SIN]
-            directionY = oldDirectionX * TGM[SIN] + directionY * TGM[COS]
-            oldPlaneX = planeX
-            planeX = planeX * TGM[COS] - planeY * TGM[SIN]
-            planeY = oldPlaneX * TGM[SIN] + planeY * TGM[COS]    
-            # dx, dy = animation_offset(weapon)
-     
+            ang = rot_speed * dt
+            ca, sa = math.cos(ang), math.sin(ang)
+            ndx = dir_x * ca - dir_y * sa
+            ndy = dir_x * sa + dir_y * ca
+            dir_x, dir_y = ndx, ndy
+            npx = plane_x * ca - plane_y * sa
+            npy = plane_x * sa + plane_y * ca
+            plane_x, plane_y = npx, npy
 
-        if keys[K_UP]:
-            if not worldMap[int(positionX + directionX * MOVESPEED)][int(positionY)]:
-                positionX += directionX * MOVESPEED
-            if not worldMap[int(positionX)][int(positionY + directionY * MOVESPEED)]:
-                positionY += directionY * MOVESPEED
-            # dx, dy = animation_offset(weapon)
-           
-                
-        if keys[K_DOWN]:
-            if not worldMap[int(positionX - directionX * MOVESPEED)][int(positionY)]:
-                positionX -= directionX * MOVESPEED
-            if not worldMap[int(positionX)][int(positionY - directionY * MOVESPEED)]:
-                positionY -= directionY * MOVESPEED
-            # dx, dy = animation_offset(weapon)
-            
+        # 무기 상태 업데이트
+        update_weapon_state(selected_weapon, weapon_state, dt)
 
-        if keys[K_F1]:
-            try:
-                pygame.image.save(screen,('PyRay' + time.strftime('%Y%m%d%H%M%S')+ '.jpeg'))
-            except:
-                print("Couldn't save jpeg screenshot")
-                
-        if keys[K_F2]:
-            try:
-                pygame.image.save(screen,('PyRay' + time.strftime('%Y%m%d%H%M%S')+ '.bmp'))
-            except:
-                print("Couldn't save bmp screenshot")
+        # 월드 렌더
+        zbuffer, rays_for_minimap = cast_rays(pos_x, pos_y, dir_x, dir_y, plane_x, plane_y)
+        render_walls(screen, zbuffer)
 
-        # showShadows - On / Off
-        if keys[K_F5]:
-            showShadow = True
-        if keys[K_F6]:
-            showShadow = False
+        # 미니맵
+        if show_minimap:
+            draw_minimap(screen, pos_x, pos_y, dir_x, dir_y, rays_for_minimap)
 
-        # showHUD - Show / Hide
-        if keys[K_F7]:
-            showHUD = True
-            print("K_F7:", keys[K_F7])
-        if keys[K_F8]:
-            showHUD = False
-            print("K_F8:", keys[K_F8])
+        # 무기 흔들림 + 공격 오프셋
+        moving = (
+            keys[K_w] or keys[K_s] or keys[K_a] or keys[K_d] or
+            keys[K_UP] or keys[K_DOWN]
+        )
+        weapon_phase += (5.0 if moving else 1.5) * dt
+        sway_x = int(1.5 * math.sin(weapon_phase * 2.0))
+        sway_y = int(2.5 * math.sin(weapon_phase * 1.0))
 
-        # Animation State update
-        update_weapon_state(weapon, weapon_state, dt)
-            
-        # Draws roof and floor
-        screen.fill((25,25,25))
-        pygame.draw.rect(screen, (50,50,50), (0, HEIGHT/2, WIDTH, HEIGHT/2)) 
-        
-        update_npc(npc, worldMap, dt)
+        (atk_dx, atk_dy), flash_on, slash_p = weapon_anim_offsets(selected_weapon, weapon_state)
+        total_dx = sway_x + atk_dx
+        total_dy = sway_y + atk_dy
 
-        # Starts drawing level from 0 to < WIDTH 
-        rays_for_minimap = [] 
-        column = 0
-        zBuffer = [0] * WIDTH
-        while column < WIDTH:
-            # Setting FOV
-            cameraX = 2.0 * column / WIDTH - 1.0
-            rayPositionX = positionX
-            rayPositionY = positionY
-            rayDirectionX = directionX + planeX * cameraX
-            rayDirectionY = directionY + planeY * cameraX + .000000000000001 # avoiding ZDE 
-
-            # In what square is the ray?
-            mapX = int(rayPositionX)
-            mapY = int(rayPositionY)
-
-            # Delta distance calculation
-            # Delta = square ( raydir * raydir) / (raydir * raydir)
-            deltaDistanceX = math.sqrt(1.0 + (rayDirectionY * rayDirectionY) / (rayDirectionX * rayDirectionX))
-            deltaDistanceY = math.sqrt(1.0 + (rayDirectionX * rayDirectionX) / (rayDirectionY * rayDirectionY))
-
-            # We need sideDistanceX and Y for distance calculation. Checks quadrant
-            if (rayDirectionX < 0):
-                stepX = -1
-                sideDistanceX = (rayPositionX - mapX) * deltaDistanceX
-
-            else:
-                stepX = 1
-                sideDistanceX = (mapX + 1.0 - rayPositionX) * deltaDistanceX
-
-            if (rayDirectionY < 0):
-                stepY = -1
-                sideDistanceY = (rayPositionY - mapY) * deltaDistanceY
-
-            else:
-                stepY = 1
-                sideDistanceY = (rayPositionY - mapY) * deltaDistanceY
-
-            # Finding distance to a wall
-            hit = 0
-            while  (hit == 0):
-                if (sideDistanceX < sideDistanceY):
-                    sideDistanceX += deltaDistanceX
-                    mapX += stepX
-                    side = 0
-                    
-                else:
-                    sideDistanceY += deltaDistanceY
-                    mapY += stepY
-                    side = 1
-                    
-                if (worldMap[mapX][mapY] > 0):
-                    hit = 1
-
-            # Correction against fish eye effect
-            if (side == 0):
-                perpWallDistance = abs((mapX - rayPositionX + ( 1.0 - stepX ) / 2.0) / rayDirectionX)
-            else:
-                perpWallDistance = abs((mapY - rayPositionY + ( 1.0 - stepY ) / 2.0) / rayDirectionY)
-
-            # Calculating HEIGHT of the line to draw
-            lineHEIGHT = abs(int(WALL_HEIGHT / (perpWallDistance+.0000001)))
-            drawStart = -lineHEIGHT / 2.0 + WALL_HEIGHT / 2.0
-
-            # if drawStat < 0 it would draw outside the screen
-            if (drawStart < 0):
-                drawStart = 0
-
-            drawEnd = lineHEIGHT / 2.0 + WALL_HEIGHT / 2.0
-
-            if (drawEnd >= WALL_HEIGHT):
-                drawEnd = WALL_HEIGHT - 1
-
-            # Wall colors 0 to 3
-            wallcolors = [ [], [150,0,0], [0,150,0], [0,0,150] ]
-            color = wallcolors[ worldMap[mapX][mapY] ]                                  
-
-            # If side == 1 then ton the color down. Gives a "showShadow" an the wall.
-            # Draws showShadow if showShadow is True
-            # Depth based shadow
-            if showShadow:
-                if side == 1:
-                    for i,v in enumerate(color):
-                        color[i] = int(v / 1.2)                    
-
-            # Drawing the graphics                           
-            pygame.draw.line(screen, color, (column,drawStart), (column, drawEnd), 2)
-            zBuffer[column] = perpWallDistance  # ← 깊이 저장
-            column += 2
-            rays_for_minimap.append( (perpWallDistance, (rayDirectionX, rayDirectionY)) )
-        draw_minimap(screen, worldMap, positionX, positionY, directionX, directionY, rays_for_minimap)
-        draw_npc_minimap(screen, npc, MINIMAP_SCALE, MINIMAP_PADDING)
-        moving = keys[K_UP] or keys[K_DOWN] or keys[K_LEFT] or keys[K_RIGHT]
-        weapon_phase += (0.12 if moving else 0.05)
-
-        sway_x = int(2 * math.sin(weapon_phase * 2.0))
-        sway_y = int(3 * math.sin(weapon_phase * 1.0))
-
-        dx, dy, flash_on, p = animation_offset(weapon, weapon_state)
-        dx += sway_x
-        dy += sway_y
-
-        draw_npc_sprite(screen, npc, positionX, positionY, directionX, directionY, planeX, planeY, npc_img, zBuffer)
-        rect = draw_weapon(screen, weapon_assets, weapon, (dx, dy))
+        rect = draw_weapon(screen, weapon_assets, selected_weapon, (total_dx, total_dy))
         if rect:
-            if weapon == "gun" and flash_on:
-                draw_muzzle_flash(screen, rect, p)
-            # if weapon == "knife" and weapon_state.get("mode") == "attack":
-            #     draw_slash_effect(screen, rect, p)
+            if selected_weapon == "gun" and flash_on:
+                draw_muzzle_flash(screen, rect)
+            if selected_weapon == "knife" and weapon_state.get("mode") == "attack":
+                draw_slash_effect(screen, rect, slash_p)
 
+        # HUD
+        if show_hud:
+            info = f"FPS {int(clock.get_fps()):3d}  Pos({pos_x:.2f},{pos_y:.2f})  Weapon:{selected_weapon}"
+            hud = font.render(info, True, (200, 200, 210))
+            pygame.draw.rect(screen, (20, 20, 30), (0, HEIGHT - 26, WIDTH, 26))
+            screen.blit(hud, (10, HEIGHT - 23))
 
-        # Drawing HUD if showHUD is True
-        if showHUD:
-            pygame.draw.rect(screen, (100,100,200), (0, HEIGHT-40, WIDTH, 40))
-            screen.blit(HUD, (20,HEIGHT-30))
+        pygame.display.flip()
 
-        # Updating display
-        pygame.event.pump()
-        pygame.display.flip()           
-       
-main()
+    close()
 
-# 1. What is the way of exiting the game? -> esc button -> how can we exit the game with cloes(x) button
-# 2. Where the player start? -> Could you trap the player?
-# 3. There are two ways of shooting rays.
-# 4. Where do we set FOV & DDA(Digital Differential Analyzer)
-# 5. Where do we increase height?
+if __name__ == "__main__":
+    main()
