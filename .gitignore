@@ -2,4 +2,4 @@
 venv311/*
 /.DS_Store
 */.DS_Store
-/ai_brain.json
+./ai_brain.json
