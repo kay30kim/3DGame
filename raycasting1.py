@@ -434,8 +434,9 @@ def render_npcs(screen, npcs, player_x, player_y, dir_x, dir_y, plane_x, plane_y
         sprite_h = abs(int(HEIGHT / depth * 0.7))
         sprite_w = int(sprite_h * (surf_w / surf_h))
 
-        draw_start_y = HALF_H - sprite_h // 2
-        draw_end_y = HALF_H + sprite_h // 2
+        NPC_VERTICAL_OFFSET = int(HEIGHT * 0.02) # 대략 화면 높이의 2%만큼 아래로
+        draw_start_y = HALF_H - sprite_h // 2 + NPC_VERTICAL_OFFSET
+        draw_end_y   = HALF_H + sprite_h // 2 + NPC_VERTICAL_OFFSET
         draw_start_x = sprite_screen_x - sprite_w // 2
         draw_end_x = sprite_screen_x + sprite_w // 2
 
