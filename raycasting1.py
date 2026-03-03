@@ -7,6 +7,9 @@ import json
 import pygame
 from pygame.locals import *
 
+MOUSE_SENSITIVITY = 0.008
+ROTATION_SPEED_REDUCED = math.radians(60)
+
 # ---------------- Config ----------------
 WIDTH, HEIGHT = 1000, 700
 HALF_W, HALF_H = WIDTH // 2, HEIGHT // 2
@@ -653,6 +656,9 @@ def main():
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("PyRay — raycasting + weapon + NPC sprite")
 
+    pygame.event.set_grab(True)
+    pygame.mouse.set_visible(False)
+
     font = pygame.font.SysFont("consolas", 16)
     clock = pygame.time.Clock()
 
@@ -661,7 +667,7 @@ def main():
     plane_x, plane_y = 0.0, 0.66
 
     move_speed = 3.0
-    rot_speed = math.radians(120)
+    rot_speed = ROTATION_SPEED_REDUCED  # math.radians(120)
 
     show_minimap = True
     show_hud = True
@@ -714,11 +720,24 @@ def main():
 
         keys = pygame.key.get_pressed()
 
+        mouse_rel = pygame.mouse.get_rel()
+        mouse_dx = mouse_rel[0]
+        
+        if mouse_dx != 0:
+            ang = mouse_dx * MOUSE_SENSITIVITY
+            ca, sa = math.cos(ang), math.sin(ang)
+            ndx = dir_x * ca - dir_y * sa
+            ndy = dir_x * sa + dir_y * ca
+            dir_x, dir_y = ndx, ndy
+            npx = plane_x * ca - plane_y * sa
+            npy = plane_x * sa + plane_y * ca
+            plane_x, plane_y = npx, npy
+
         # 이동 (WASD + 방향키)
         fx, fy = dir_x, dir_y
-        rx, ry = dir_y, -dir_x
+        rx, ry = -dir_y, dir_x
 
-        if keys[K_w] or keys[K_UP]:
+        if keys[K_w]:
             nx = pos_x + fx * move_speed * dt
             ny = pos_y + fy * move_speed * dt
             if not is_wall(nx, pos_y):
@@ -726,7 +745,7 @@ def main():
             if not is_wall(pos_x, ny):
                 pos_y = ny
 
-        if keys[K_s] or keys[K_DOWN]:
+        if keys[K_s]:
             nx = pos_x - fx * move_speed * dt
             ny = pos_y - fy * move_speed * dt
             if not is_wall(nx, pos_y):
@@ -750,27 +769,6 @@ def main():
             if not is_wall(pos_x, ny):
                 pos_y = ny
 
-        # 회전 (좌/우)
-        if keys[K_LEFT]:
-            ang = -rot_speed * dt
-            ca, sa = math.cos(ang), math.sin(ang)
-            ndx = dir_x * ca - dir_y * sa
-            ndy = dir_x * sa + dir_y * ca
-            dir_x, dir_y = ndx, ndy
-            npx = plane_x * ca - plane_y * sa
-            npy = plane_x * sa + plane_y * ca
-            plane_x, plane_y = npx, npy
-
-        if keys[K_RIGHT]:
-            ang = rot_speed * dt
-            ca, sa = math.cos(ang), math.sin(ang)
-            ndx = dir_x * ca - dir_y * sa
-            ndy = dir_x * sa + dir_y * ca
-            dir_x, dir_y = ndx, ndy
-            npx = plane_x * ca - plane_y * sa
-            npy = plane_x * sa + plane_y * ca
-            plane_x, plane_y = npx, npy
-
         # 무기 / NPC / 총알 갱신
         update_weapon_state(selected_weapon, weapon_state, dt)
         update_npcs(npcs, brain, dt, pos_x, pos_y)
@@ -790,10 +788,8 @@ def main():
         draw_crosshair(screen)
 
         # 무기 흔들림 + 공격 오프셋
-        moving = (
-            keys[K_w] or keys[K_s] or keys[K_a] or keys[K_d] or
-            keys[K_UP] or keys[K_DOWN]
-        )
+        moving = keys[K_w] or keys[K_s] or keys[K_a] or keys[K_d]
+        
         weapon_phase += (5.0 if moving else 1.5) * dt
         sway_x = int(1.5 * math.sin(weapon_phase * 2.0))
         sway_y = int(2.5 * math.sin(weapon_phase * 1.0))
@@ -819,6 +815,8 @@ def main():
         pygame.display.flip()
 
     brain.save()
+    pygame.event.set_grab(False)
+    pygame.mouse.set_visible(True)
     close()
 
 if __name__ == "__main__":
