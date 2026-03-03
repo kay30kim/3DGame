@@ -754,16 +754,16 @@ def main():
                 pos_y = ny
 
         if keys[K_a]:
-            nx = pos_x - rx * move_speed * dt
-            ny = pos_y - ry * move_speed * dt
+            nx = pos_x + rx * move_speed * dt
+            ny = pos_y + ry * move_speed * dt
             if not is_wall(nx, pos_y):
                 pos_x = nx
             if not is_wall(pos_x, ny):
                 pos_y = ny
 
         if keys[K_d]:
-            nx = pos_x + rx * move_speed * dt
-            ny = pos_y + ry * move_speed * dt
+            nx = pos_x - rx * move_speed * dt
+            ny = pos_y - ry * move_speed * dt
             if not is_wall(nx, pos_y):
                 pos_x = nx
             if not is_wall(pos_x, ny):
