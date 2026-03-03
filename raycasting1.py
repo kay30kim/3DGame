@@ -434,8 +434,9 @@ def render_npcs(screen, npcs, player_x, player_y, dir_x, dir_y, plane_x, plane_y
         sprite_h = abs(int(HEIGHT / depth * 0.7))
         sprite_w = int(sprite_h * (surf_w / surf_h))
 
-        draw_start_y = HALF_H - sprite_h // 2
-        draw_end_y = HALF_H + sprite_h // 2
+        NPC_VERTICAL_OFFSET = int(HEIGHT * 0.02) # 대략 화면 높이의 2%만큼 아래로
+        draw_start_y = HALF_H - sprite_h // 2 + NPC_VERTICAL_OFFSET
+        draw_end_y   = HALF_H + sprite_h // 2 + NPC_VERTICAL_OFFSET
         draw_start_x = sprite_screen_x - sprite_w // 2
         draw_end_x = sprite_screen_x + sprite_w // 2
 
@@ -590,7 +591,63 @@ def render_walls(screen, zbuffer):
 
         pygame.draw.line(screen, color, (col, y1), (col, y2))
 
+class Bullet:
+    def __init__(self, x, y, dir_x, dir_y, speed=15.0):
+        self.x = float(x)
+        self.y = float(y)
+        self.dir_x = float(dir_x)
+        self.dir_y = float(dir_y)
+        self.speed = float(speed)
+        mag = math.hypot(dir_x, dir_y)
+        if mag > 0:
+            self.dir_x /= mag
+            self.dir_y /= mag
+
+def update_bullets(bullets, dt):
+    to_remove = []
+    for bullet in bullets:
+        bullet.x += bullet.dir_x * bullet.speed * dt
+        bullet.y += bullet.dir_y * bullet.speed * dt
+        
+        # 벽에 부딪히면 삭제
+        if is_wall(bullet.x, bullet.y):
+            to_remove.append(bullet)
+    
+    for bullet in to_remove:
+        bullets.remove(bullet)
+
+def check_bullet_npc_collision(bullets, npcs):
+    """총알과 NPC 충돌 감지"""
+    bullets_to_remove = []
+    npcs_to_remove = []
+    
+    for bullet in bullets:
+        for npc in npcs:
+            dist = math.hypot(bullet.x - npc.x, bullet.y - npc.y)
+            if dist < 0.4:
+                bullets_to_remove.append(bullet)
+                npcs_to_remove.append(npc)
+                break
+    
+    for bullet in bullets_to_remove:
+        if bullet in bullets:
+            bullets.remove(bullet)
+    
+    for npc in npcs_to_remove:
+        if npc in npcs:
+            npcs.remove(npc)
+
+def draw_crosshair(screen):
+    cx, cy = HALF_W, HALF_H
+    color = (255, 50, 50)
+
+    pygame.draw.circle(screen, color, (cx, cy), 3)
+    pygame.draw.line(screen, color, (cx - 12, cy), (cx + 12, cy), 1)
+    pygame.draw.line(screen, color, (cx, cy - 12), (cx, cy + 12), 1)
+
+
 # ---------------- Main ----------------
+
 def main():
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -618,6 +675,8 @@ def main():
     brain = AIBrain()
     npc_surf = build_npc_sprite()
     spawn_npc(npcs, pos_x, pos_y)
+    
+    bullets = []
 
     running = True
     while running:
@@ -641,11 +700,17 @@ def main():
                 elif event.key == K_3:
                     selected_weapon = "knife"
                 elif event.key == K_SPACE:
-                    trigger_attack(selected_weapon, weapon_state)
+                    if selected_weapon == "gun":
+                        bullets.append(Bullet(pos_x, pos_y, dir_x, dir_y))
+                    else:
+                        trigger_attack(selected_weapon, weapon_state)
                 elif event.key == K_n:
                     spawn_npc(npcs, pos_x, pos_y)
             elif event.type == MOUSEBUTTONDOWN and event.button == 1:
-                trigger_attack(selected_weapon, weapon_state)
+                if selected_weapon == "gun":
+                    bullets.append(Bullet(pos_x, pos_y, dir_x, dir_y))
+                else:
+                    trigger_attack(selected_weapon, weapon_state)
 
         keys = pygame.key.get_pressed()
 
@@ -706,9 +771,11 @@ def main():
             npy = plane_x * sa + plane_y * ca
             plane_x, plane_y = npx, npy
 
-        # 무기 / NPC 갱신
+        # 무기 / NPC / 총알 갱신
         update_weapon_state(selected_weapon, weapon_state, dt)
         update_npcs(npcs, brain, dt, pos_x, pos_y)
+        update_bullets(bullets, dt)
+        check_bullet_npc_collision(bullets, npcs)
 
         # 월드 렌더
         zbuffer, rays_for_minimap = cast_rays(pos_x, pos_y, dir_x, dir_y, plane_x, plane_y)
@@ -718,6 +785,9 @@ def main():
         # 미니맵
         if show_minimap:
             draw_minimap(screen, pos_x, pos_y, dir_x, dir_y, rays_for_minimap, npcs)
+
+        # 조준점 표시
+        draw_crosshair(screen)
 
         # 무기 흔들림 + 공격 오프셋
         moving = (
@@ -741,7 +811,7 @@ def main():
 
         # HUD
         if show_hud:
-            info = f"FPS {int(clock.get_fps()):3d}  Pos({pos_x:.2f},{pos_y:.2f})  NPCs:{len(npcs)}  Weapon:{selected_weapon}"
+            info = f"FPS {int(clock.get_fps()):3d}  Pos({pos_x:.2f},{pos_y:.2f})  NPCs:{len(npcs)}  Bullets:{len(bullets)}  Weapon:{selected_weapon}"
             hud = font.render(info, True, (200, 200, 210))
             pygame.draw.rect(screen, (20, 20, 30), (0, HEIGHT - 26, WIDTH, 26))
             screen.blit(hud, (10, HEIGHT - 23))
