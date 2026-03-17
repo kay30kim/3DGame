@@ -16,6 +16,13 @@ HALF_W, HALF_H = WIDTH // 2, HEIGHT // 2
 FPS = 60
 FOV = math.radians(70)
 MAX_DEPTH = 20.0
+BRAIN_PATH = "ai_brain.json"
+ALPHA = 0.08
+DECAY = 0.995
+USE_VISION = True           # NPC 시야 추가
+USE_PATHFINDING = True      # A* 경로 찾기
+USE_MEMORY = True           # NPC 기억 시스템
+USE_COOPERATION = True      # NPC 협력 추가
 
 worldMap = [
     [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2],
@@ -347,6 +354,115 @@ class AIBrain:
         cur = 0.98 * cur + 0.02 * 1.0
         self.weights[action_name] = max(0.1, min(5.0, cur))
 
+
+class NPCWithVision(NPC):
+    """시야각 기능 추가"""
+    def __init__(self, x, y, speed=2.0):
+        super().__init__(x, y, speed)
+        self.vision_range = 10.0      # 시야 거리
+        self.vision_angle = math.pi   # 180도 시야각
+        self.last_player_pos = None   # 마지막 플레이어 위치 기억
+    
+    def can_see_player(self, player_x, player_y, player_dir):
+        dist = math.hypot(player_x - self.x, player_y - self.y)
+        if dist > self.vision_range:
+            return False
+        
+        # 시야각 내인지 확인
+        angle_to_player = math.atan2(player_y - self.y, player_x - self.x)
+        npc_facing = getattr(self, 'facing', 0)
+        
+        angle_diff = abs(angle_to_player - npc_facing)
+        if angle_diff > math.pi:
+            angle_diff = 2 * math.pi - angle_diff
+        
+        return angle_diff < self.vision_angle / 2
+
+class AdvancedAIBrain(AIBrain):
+    def __init__(self, path=BRAIN_PATH):
+        super().__init__(path)
+        self.state_history = []
+        self.npc_group_memory = {}
+    
+    def choose_with_context(self, npc, player_x, player_y, npcs=None):
+        names = [name for _, _, name in self.ACTIONS]
+        ws = [max(1e-3, self.weights[name]) for name in names]
+        
+        if USE_COOPERATION and npcs:
+            nearby_npcs = [n for n in npcs 
+                          if n != npc and 
+                          math.hypot(n.x - npc.x, n.y - npc.y) < 3.0]
+            if nearby_npcs:
+                # 협력 보너스
+                for i, (dx, dy, name) in enumerate(self.ACTIONS):
+                    if name not in ["stay"]:
+                        ws[i] *= 1.3  # 30% 강화
+        
+        total = sum(ws)
+        r = random.random() * total
+        acc = 0.0
+        for i, w in enumerate(ws):
+            acc += w
+            if r <= acc:
+                return self.ACTIONS[i]
+        return self.ACTIONS[0]
+    
+    def learn_from_group(self, action_name, improved, nearby_count):
+        cur = self.weights[action_name]
+        bonus = 1.0 + (nearby_count * 0.05) 
+        
+        if improved:
+            cur += ALPHA * bonus
+        else:
+            cur *= DECAY
+        
+        cur = 0.98 * cur + 0.02 * 1.0
+        self.weights[action_name] = max(0.1, min(5.0, cur))
+
+def update_npcs_advanced(npcs, brain, dt, player_x, player_y):
+    for npc in npcs:
+        prev_dist = math.hypot(player_x - npc.x, player_y - npc.y)
+        
+        # 시야 확인
+        can_see = True
+        if USE_VISION and isinstance(npc, NPCWithVision):
+            can_see = npc.can_see_player(player_x, player_y, 0)
+            if can_see:
+                npc.last_player_pos = (player_x, player_y)
+        
+        # 문맥 기반 선택
+        if USE_COOPERATION:
+            ax, ay, name = brain.choose_with_context(npc, player_x, player_y, npcs)
+        else:
+            ax, ay, name = brain.choose(npc, None)
+        
+        mag = math.hypot(ax, ay)
+        if mag > 0:
+            ax /= mag
+            ay /= mag
+        
+        step = npc.speed * dt
+        try_move_npc(npc, ax * step, ay * step)
+        
+        new_dist = math.hypot(player_x - npc.x, player_y - npc.y)
+        
+        # 그룹 학습
+        nearby_npcs = sum(1 for n in npcs 
+                         if n != npc and 
+                         math.hypot(n.x - npc.x, n.y - npc.y) < 3.0)
+        
+        if USE_COOPERATION:
+            brain.learn_from_group(name, new_dist < prev_dist, nearby_npcs)
+        else:
+            brain.learn(name, new_dist < prev_dist)
+        
+        # 기억 업데이트
+        if USE_MEMORY and isinstance(npc, NPCWithVision):
+            npc.facing = math.atan2(ay, ax)
+    
+    if random.random() < 0.02:
+        brain.save()
+
 def spawn_npc(npcs, player_x, player_y):
     free = []
     for y in range(MAP_H):
@@ -460,6 +576,8 @@ def render_npcs(screen, npcs, player_x, player_y, dir_x, dir_y, plane_x, plane_y
                 if 0 <= tex_x < sprite_w:
                     src_rect = pygame.Rect(tex_x, 0, 1, sprite_h)
                     screen.blit(scaled, (stripe, draw_start_y), src_rect)
+
+
 
 # ---------------- Minimap ----------------
 def draw_minimap(screen, pos_x, pos_y, dir_x, dir_y, rays, npcs=None):
@@ -678,10 +796,26 @@ def main():
     weapon_phase = 0.0
 
     npcs = []
-    brain = AIBrain()
+    # brain = AIBrain()
+    brain = AdvancedAIBrain()
     npc_surf = build_npc_sprite()
     spawn_npc(npcs, pos_x, pos_y)
     
+    for _ in range(3):  # 3마리 스폰
+        free = []
+        for y in range(MAP_H):
+            for x in range(MAP_W):
+                if worldMap[y][x] == 0:
+                    free.append((x + 0.5, y + 0.5))
+        random.shuffle(free)
+        for x, y in free:
+            if (x - pos_x) ** 2 + (y - pos_y) ** 2 > 9.0:
+                if USE_VISION:
+                    npcs.append(NPCWithVision(x, y, speed=2.5))
+                else:
+                    npcs.append(NPC(x, y, speed=2.5))
+                break
+
     bullets = []
 
     running = True
@@ -771,7 +905,10 @@ def main():
 
         # 무기 / NPC / 총알 갱신
         update_weapon_state(selected_weapon, weapon_state, dt)
-        update_npcs(npcs, brain, dt, pos_x, pos_y)
+        if USE_COOPERATION:
+            update_npcs_advanced(npcs, brain, dt, pos_x, pos_y)
+        else:
+            update_npcs(npcs, brain, dt, pos_x, pos_y)
         update_bullets(bullets, dt)
         check_bullet_npc_collision(bullets, npcs)
 
