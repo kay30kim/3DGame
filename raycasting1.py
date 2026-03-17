@@ -7,7 +7,7 @@ import json
 import pygame
 from pygame.locals import *
 
-MOUSE_SENSITIVITY = 0.008
+MOUSE_SENSITIVITY = 0.001
 ROTATION_SPEED_REDUCED = math.radians(60)
 
 # ---------------- Config ----------------
