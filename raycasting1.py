@@ -28,7 +28,7 @@ worldMap = [
     [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
     [2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 2, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 2, 3, 2, 3, 0, 0, 2],
+    [1, 0, 2, 0, 1, 3, 0, 0, 0, 0, 0, 0, 0, 2, 3, 2, 3, 0, 0, 2],
     [2, 0, 3, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
     [1, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
     [2, 3, 1, 0, 0, 2, 0, 0, 0, 2, 3, 2, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -419,16 +419,25 @@ class AdvancedAIBrain(AIBrain):
         cur = 0.98 * cur + 0.02 * 1.0
         self.weights[action_name] = max(0.1, min(5.0, cur))
 
-def update_npcs_advanced(npcs, brain, dt, player_x, player_y):
+def update_npcs_advanced(npcs, brain, dt, player_x, player_y, player_dir, npc_bullets):
     for npc in npcs:
         prev_dist = math.hypot(player_x - npc.x, player_y - npc.y)
         
         # 시야 확인
         can_see = True
         if USE_VISION and isinstance(npc, NPCWithVision):
-            can_see = npc.can_see_player(player_x, player_y, 0)
+            can_see = npc.can_see_player(player_x, player_y, player_dir)
             if can_see:
                 npc.last_player_pos = (player_x, player_y)
+                # NPC가 플레이어를 볼 수 있으면 10% 확률로 총을 쏨
+                if random.random() < 0.1:
+                    # 플레이어 방향으로 총알 발사, 정확도 50% (노이즈 추가)
+                    angle_to_player = math.atan2(player_y - npc.y, player_x - npc.x)
+                    noise = random.uniform(-0.3, 0.3)  # 라디안 노이즈
+                    shoot_angle = angle_to_player + noise
+                    shoot_dir_x = math.cos(shoot_angle)
+                    shoot_dir_y = math.sin(shoot_angle)
+                    npc_bullets.append(Bullet(npc.x, npc.y, shoot_dir_x, shoot_dir_y))
         
         # 문맥 기반 선택
         if USE_COOPERATION:
@@ -472,7 +481,7 @@ def spawn_npc(npcs, player_x, player_y):
     random.shuffle(free)
     for x, y in free:
         if (x - player_x) ** 2 + (y - player_y) ** 2 > 9.0:  # 플레이어랑 최소 거리
-            npcs.append(NPC(x, y))
+            npcs.append(NPCWithVision(x, y))
             break
 
 def try_move_npc(npc, dx, dy):
@@ -576,8 +585,6 @@ def render_npcs(screen, npcs, player_x, player_y, dir_x, dir_y, plane_x, plane_y
                 if 0 <= tex_x < sprite_w:
                     src_rect = pygame.Rect(tex_x, 0, 1, sprite_h)
                     screen.blit(scaled, (stripe, draw_start_y), src_rect)
-
-
 
 # ---------------- Minimap ----------------
 def draw_minimap(screen, pos_x, pos_y, dir_x, dir_y, rays, npcs=None):
@@ -758,6 +765,25 @@ def check_bullet_npc_collision(bullets, npcs):
         if npc in npcs:
             npcs.remove(npc)
 
+def check_bullet_player_collision(bullets, player_x, player_y, health):
+    """NPC 총알과 플레이어 충돌 감지"""
+    bullets_to_remove = []
+    hit = False
+    
+    for bullet in bullets:
+        dist = math.hypot(bullet.x - player_x, bullet.y - player_y)
+        if dist < 0.4:
+            bullets_to_remove.append(bullet)
+            hit = True
+            break
+    
+    for bullet in bullets_to_remove:
+        if bullet in bullets:
+            bullets.remove(bullet)
+    
+    if hit:
+        health[0] -= 10  # 체력 감소
+
 def draw_crosshair(screen):
     cx, cy = HALF_W, HALF_H
     color = (255, 50, 50)
@@ -783,6 +809,7 @@ def main():
     pos_x, pos_y = 3.0, 7.0
     dir_x, dir_y = 1.0, 0.0
     plane_x, plane_y = 0.0, 0.66
+    health = [100]  # 플레이어 체력
 
     move_speed = 3.0
     rot_speed = ROTATION_SPEED_REDUCED  # math.radians(120)
@@ -796,27 +823,12 @@ def main():
     weapon_phase = 0.0
 
     npcs = []
-    # brain = AIBrain()
     brain = AdvancedAIBrain()
     npc_surf = build_npc_sprite()
     spawn_npc(npcs, pos_x, pos_y)
     
-    for _ in range(3):  # 3마리 스폰
-        free = []
-        for y in range(MAP_H):
-            for x in range(MAP_W):
-                if worldMap[y][x] == 0:
-                    free.append((x + 0.5, y + 0.5))
-        random.shuffle(free)
-        for x, y in free:
-            if (x - pos_x) ** 2 + (y - pos_y) ** 2 > 9.0:
-                if USE_VISION:
-                    npcs.append(NPCWithVision(x, y, speed=2.5))
-                else:
-                    npcs.append(NPC(x, y, speed=2.5))
-                break
-
     bullets = []
+    npc_bullets = []
 
     running = True
     while running:
@@ -888,14 +900,6 @@ def main():
                 pos_y = ny
 
         if keys[K_a]:
-            nx = pos_x + rx * move_speed * dt
-            ny = pos_y + ry * move_speed * dt
-            if not is_wall(nx, pos_y):
-                pos_x = nx
-            if not is_wall(pos_x, ny):
-                pos_y = ny
-
-        if keys[K_d]:
             nx = pos_x - rx * move_speed * dt
             ny = pos_y - ry * move_speed * dt
             if not is_wall(nx, pos_y):
@@ -903,14 +907,21 @@ def main():
             if not is_wall(pos_x, ny):
                 pos_y = ny
 
+        if keys[K_d]:
+            nx = pos_x + rx * move_speed * dt
+            ny = pos_y + ry * move_speed * dt
+            if not is_wall(nx, pos_y):
+                pos_x = nx
+            if not is_wall(pos_x, ny):
+                pos_y = ny
+
         # 무기 / NPC / 총알 갱신
         update_weapon_state(selected_weapon, weapon_state, dt)
-        if USE_COOPERATION:
-            update_npcs_advanced(npcs, brain, dt, pos_x, pos_y)
-        else:
-            update_npcs(npcs, brain, dt, pos_x, pos_y)
+        update_npcs_advanced(npcs, brain, dt, pos_x, pos_y, math.atan2(dir_y, dir_x), npc_bullets)
         update_bullets(bullets, dt)
+        update_bullets(npc_bullets, dt)
         check_bullet_npc_collision(bullets, npcs)
+        check_bullet_player_collision(npc_bullets, pos_x, pos_y, health)
 
         # 월드 렌더
         zbuffer, rays_for_minimap = cast_rays(pos_x, pos_y, dir_x, dir_y, plane_x, plane_y)
@@ -944,12 +955,24 @@ def main():
 
         # HUD
         if show_hud:
-            info = f"FPS {int(clock.get_fps()):3d}  Pos({pos_x:.2f},{pos_y:.2f})  NPCs:{len(npcs)}  Bullets:{len(bullets)}  Weapon:{selected_weapon}"
+            info = f"FPS {int(clock.get_fps()):3d}  Pos({pos_x:.2f},{pos_y:.2f})  Health:{health[0]}  NPCs:{len(npcs)}  Bullets:{len(bullets)}  Weapon:{selected_weapon}"
             hud = font.render(info, True, (200, 200, 210))
             pygame.draw.rect(screen, (20, 20, 30), (0, HEIGHT - 26, WIDTH, 26))
             screen.blit(hud, (10, HEIGHT - 23))
 
         pygame.display.flip()
+
+        # 게임 오버 체크
+        if health[0] <= 0:
+            running = False
+
+    # 게임 오버 메시지
+    if health[0] <= 0:
+        screen.fill((0, 0, 0))
+        game_over_text = font.render("GAME OVER - You were shot by NPC!", True, (255, 0, 0))
+        screen.blit(game_over_text, (WIDTH // 2 - game_over_text.get_width() // 2, HEIGHT // 2 - game_over_text.get_height() // 2))
+        pygame.display.flip()
+        pygame.time.wait(3000)  # 3초 대기
 
     brain.save()
     pygame.event.set_grab(False)
